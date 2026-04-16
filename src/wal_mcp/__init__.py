@@ -12,5 +12,7 @@ Key features:
 Supported formats: VCD, FST (via WAL)
 """
 
-__version__ = "0.1.0"
+import importlib.metadata
+
+__version__ = importlib.metadata.version("wal-mcp")
 __author__ = "Yossi Nivin"
