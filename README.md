@@ -14,7 +14,7 @@ Get hierarchical list of signals from waveform file with optional regex filterin
 {"tool": "get_signal_list", "arguments": {"waveform_file": "sim.vcd", "pattern": "cpu.*"}}
 ```
 
-### get_signal_transitions  
+### get_signal_transitions
 Extract signal transitions within specified time ranges.
 - `waveform_file` (required): Path to waveform file
 - `signal_name` (required): Full signal name
@@ -37,7 +37,7 @@ Get the total simulation length/duration.
 
 ### execute_wal_expression
 Execute WAL expressions for advanced waveform analysis.
-- `waveform_file` (required): Path to waveform file  
+- `waveform_file` (required): Path to waveform file
 - `expression` (required): WAL expression to execute
 
 **Example:**
@@ -66,7 +66,7 @@ Generate signal-specific WAL examples for your waveform.
 ## Supported Formats
 
 - VCD (Value Change Dump)
-- FST (Fast Signal Trace)  
+- FST (Fast Signal Trace)
 - Other formats supported by WAL
 
 ## Credits

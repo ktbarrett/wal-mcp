@@ -1,14 +1,16 @@
-import pytest
 import os
-from unittest.mock import patch
 
 # Make sure the server module is importable
 import sys
+from unittest.mock import patch
+
+import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from wal_mcp import server
 from mcp.types import TextContent
+
+from wal_mcp import server
 
 # Paths to the sample waveform files
 TRACE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "traces"))
@@ -279,7 +281,7 @@ async def test_signal_transitions_time_range_parameters(waveform_file):
     args = {"waveform_file": waveform_file, "signal_name": signal_name, "start_time": 5}
     result = await server._get_signal_transitions(args)
     text = result[0].text
-    assert f"Initial value at time 5:" in text
+    assert "Initial value at time 5:" in text
     assert "Time range analyzed: 5 to" in text
 
     # Test with both start_time and end_time
@@ -352,7 +354,6 @@ async def test_corrupted_waveform_handling():
         f.write("This is not a valid VCD file content")
         temp_file = f.name
 
-    try:
         # Test various operations with corrupted file
         result = await server._get_signal_list({"waveform_file": temp_file})
         assert isinstance(result, list)
@@ -371,15 +372,6 @@ async def test_corrupted_waveform_handling():
         assert len(result) == 1
         assert "Error:" in result[0].text or "error" in result[0].text.lower()
 
-    finally:
-        # Clean up temp file
-        import os
-
-        try:
-            os.unlink(temp_file)
-        except:
-            pass
-
 
 @pytest.mark.asyncio
 async def test_waveform_cache_error_handling():
@@ -391,10 +383,8 @@ async def test_waveform_cache_error_handling():
     assert len(server._waveform_cache) == 0
 
     # Try to load invalid file - should raise exception but not cache
-    try:
+    with pytest.raises(Exception):
         await server._load_waveform(invalid_file)
-    except:
-        pass  # Expected to fail
 
     # Cache should still be empty after failed load
     assert len(server._waveform_cache) == 0

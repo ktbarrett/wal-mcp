@@ -9,18 +9,16 @@ Supported formats: VCD, FST (via WAL)
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Tuple
 import re
+from typing import Any
 
 from mcp.server import Server
+from mcp.server.lowlevel import NotificationOptions
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
-from mcp.server.lowlevel import NotificationOptions
 from mcp.types import TextContent, Tool
-
-from wal.core import TraceContainer
+from wal.core import TraceContainer, read_wal_sexpr
 from wal.eval import SEval
-from wal.core import read_wal_sexpr
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +26,7 @@ logging.basicConfig(level=logging.INFO)
 app = Server("wal-mcp")
 
 # Cache: {file_path: (modification_time, TraceContainer)}
-_waveform_cache: Dict[str, Tuple[float, TraceContainer]] = {}
+_waveform_cache: dict[str, tuple[float, TraceContainer]] = {}
 
 # WAL Documentation and Examples
 WAL_DOCUMENTATION = {
@@ -175,7 +173,7 @@ COMMON PATTERNS:
 
 
 @app.list_tools()
-async def list_tools() -> List[Tool]:
+async def list_tools() -> list[Tool]:
     """Return list of available waveform analysis tools."""
     return [
         Tool(
@@ -304,7 +302,7 @@ Use get_wal_help for detailed documentation and examples.""",
 
 
 @app.call_tool()
-async def call_tool(tool_name: str, arguments: Dict[str, Any]):
+async def call_tool(tool_name: str, arguments: dict[str, Any]):
     """Route tool calls to appropriate handlers."""
     try:
         if tool_name == "get_signal_list":
@@ -377,7 +375,7 @@ async def _load_waveform(waveform_file: str) -> TraceContainer:
     return container
 
 
-async def _get_signal_list(args: Dict[str, Any]) -> List[TextContent]:
+async def _get_signal_list(args: dict[str, Any]) -> list[TextContent]:
     """Get hierarchical list of signals from waveform file.
 
     Args:
@@ -438,7 +436,7 @@ async def _get_signal_list(args: Dict[str, Any]) -> List[TextContent]:
     return [TextContent(type="text", text="\n".join(result_lines))]
 
 
-async def _get_signal_transitions(args: Dict[str, Any]) -> List[TextContent]:
+async def _get_signal_transitions(args: dict[str, Any]) -> list[TextContent]:
     """Get signal transitions within specified time range.
 
     Args:
@@ -513,7 +511,7 @@ async def _get_signal_transitions(args: Dict[str, Any]) -> List[TextContent]:
             result_lines.append("No transitions detected in time range.")
 
         time_range = f"{start_time} to {actual_end_time if end_time == 0 else end_time}"
-        result_lines.append(f"")
+        result_lines.append("")
         result_lines.append(f"Time range analyzed: {time_range}")
         result_lines.append(f"Total time steps checked: {current_time - start_time}")
 
@@ -525,7 +523,7 @@ async def _get_signal_transitions(args: Dict[str, Any]) -> List[TextContent]:
     return [TextContent(type="text", text="\n".join(result_lines))]
 
 
-async def _get_waveform_length(args: Dict[str, Any]) -> List[TextContent]:
+async def _get_waveform_length(args: dict[str, Any]) -> list[TextContent]:
     """Get the length of the waveform file.
 
     Args:
@@ -549,7 +547,7 @@ async def _get_waveform_length(args: Dict[str, Any]) -> List[TextContent]:
             f"Waveform file: {waveform_file}",
             f"Length: {waveform_length} time steps",
             f"Time range: 0 to {waveform_length - 1}",
-            f"Method: WAL (length (find true))",
+            "Method: WAL (length (find true))",
         ]
 
     except (FileNotFoundError, ValueError) as e:
@@ -563,7 +561,7 @@ async def _get_waveform_length(args: Dict[str, Any]) -> List[TextContent]:
     return [TextContent(type="text", text="\n".join(result_lines))]
 
 
-async def _execute_wal_expression(args: Dict[str, Any]) -> List[TextContent]:
+async def _execute_wal_expression(args: dict[str, Any]) -> list[TextContent]:
     """Execute WAL expression on waveform file.
 
     Args:
@@ -629,7 +627,7 @@ async def _execute_wal_expression(args: Dict[str, Any]) -> List[TextContent]:
     return [TextContent(type="text", text="\n".join(result_lines))]
 
 
-async def _get_wal_help(args: Dict[str, Any]) -> List[TextContent]:
+async def _get_wal_help(args: dict[str, Any]) -> list[TextContent]:
     """Get WAL documentation and examples.
 
     Args:
@@ -665,7 +663,7 @@ async def _get_wal_help(args: Dict[str, Any]) -> List[TextContent]:
     return [TextContent(type="text", text="\n".join(result_lines))]
 
 
-def _get_wal_error_suggestions(error_msg: str, signals: list) -> List[str]:
+def _get_wal_error_suggestions(error_msg: str, signals: list) -> list[str]:
     """Generate helpful WAL suggestions based on error message and available signals."""
     suggestions = []
 
@@ -717,7 +715,7 @@ def _get_wal_error_suggestions(error_msg: str, signals: list) -> List[str]:
     return suggestions
 
 
-async def _get_wal_examples(args: Dict[str, Any]) -> List[TextContent]:
+async def _get_wal_examples(args: dict[str, Any]) -> list[TextContent]:
     """Get WAL examples customized for the specific waveform signals.
 
     Args:
@@ -744,7 +742,7 @@ async def _get_wal_examples(args: Dict[str, Any]) -> List[TextContent]:
         counter_signals = [
             s for s in all_signals if "counter" in s.lower() or "count" in s.lower()
         ]
-        data_signals = [
+        [
             s
             for s in all_signals
             if s not in clock_signals + reset_signals + counter_signals
@@ -813,7 +811,7 @@ async def _get_wal_examples(args: Dict[str, Any]) -> List[TextContent]:
             sig1, sig2 = all_signals[0], all_signals[1]
             result_lines.extend(
                 [
-                    f"MULTI-SIGNAL PATTERNS:",
+                    "MULTI-SIGNAL PATTERNS:",
                     f"• (find (&& (= {sig1} 1) (= {sig2} 0))) - {sig1} high AND {sig2} low",
                     f"• (find (|| (= {sig1} 1) (= {sig2} 1))) - Either signal high",
                     f"• (find (&& (>= {sig1} 1) (>= {sig2} 1))) - Both signals non-zero",
@@ -825,12 +823,12 @@ async def _get_wal_examples(args: Dict[str, Any]) -> List[TextContent]:
         result_lines.extend(
             [
                 "DEBUGGING PATTERNS:",
-                f"• (find (= overflow 1)) - Find overflow events (if overflow signal exists)",
-                f"• (find (&& (= valid 1) (= ready 0))) - Handshake stalls (if protocol signals exist)",
+                "• (find (= overflow 1)) - Find overflow events (if overflow signal exists)",
+                "• (find (&& (= valid 1) (= ready 0))) - Handshake stalls (if protocol signals exist)",
                 f"• (length (find (> {all_signals[-1]} 15))) - Values out of range (example: >15)",
                 "",
                 "TIMING ANALYSIS:",
-                f"• (step 0) INDEX - Go to start and show time",
+                "• (step 0) INDEX - Go to start and show time",
                 f"• (step 10) {all_signals[0]} - Advance 10 steps and show signal value",
                 f"• (find (= {all_signals[0]} target)) - Find specific signal values",
                 "",
