@@ -44,7 +44,6 @@ Key Concepts:
 • Lists: Most operations return lists of values/times
 • Conditions: Use for filtering and searching
 """,
-
     "functions": """
 Core WAL Functions for Waveform Analysis:
 
@@ -68,7 +67,7 @@ SEARCH & FILTER:
 
 LOGICAL OPERATIONS:
 • (&& cond1 cond2 ...) - Logical AND
-• (|| cond1 cond2 ...) - Logical OR  
+• (|| cond1 cond2 ...) - Logical OR
 • Note: 'and', 'or', 'not' are not available in this WAL implementation
 
 ARITHMETIC:
@@ -77,7 +76,6 @@ ARITHMETIC:
 • (* arg1 arg2 ...) - Multiplication
 • (/ arg1 arg2 ...) - Division
 """,
-
     "examples": """
 WAL Usage Examples:
 
@@ -110,7 +108,6 @@ MULTI-STEP ANALYSIS:
 • (step 0) (find (= reset 1)) - Go to start, find reset assertion times
 • (length SIGNALS) - Number of signals in waveform
 """,
-
     "debugging": """
 Common WAL Debugging Patterns:
 
@@ -126,7 +123,7 @@ TIMING ANALYSIS:
 
 SIGNAL VALIDATION:
 • Unknown states: (find (= signal 'x')) - Find X states (if supported)
-• Range check: (find (> signal max_value)) - Values out of range  
+• Range check: (find (> signal max_value)) - Values out of range
 • Constant check: (count (!= signal expected)) - Non-constant periods
 
 MEMORY/COUNTER ANALYSIS:
@@ -139,7 +136,6 @@ ERROR DETECTION:
 • Race conditions: Multiple signals changing simultaneously
 • Protocol violations: Invalid state combinations
 """,
-
     "syntax": """
 WAL Syntax Reference:
 
@@ -152,7 +148,7 @@ BASIC SYNTAX:
 
 FUNCTION CALLS:
 • (function) - No arguments
-• (function arg) - One argument  
+• (function arg) - One argument
 • (function arg1 arg2 arg3) - Multiple arguments
 
 OPERATORS:
@@ -174,7 +170,7 @@ COMMON PATTERNS:
 • (function (condition signal value)) - Nested conditions
 • (operation (find condition)) - Apply operation to search results
 • (length (find condition)) - Count matching conditions
-"""
+""",
 }
 
 
@@ -182,73 +178,73 @@ COMMON PATTERNS:
 async def list_tools() -> List[Tool]:
     """Return list of available waveform analysis tools."""
     return [
-            Tool(
-                name="get_signal_list",
-                description="Get hierarchical list of signals from waveform file",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "waveform_file": {
-                            "type": "string",
-                            "description": "Path to waveform file (.vcd, .fst, etc.)",
-                        },
-                        "pattern": {
-                            "type": "string",
-                            "description": "Optional regex pattern to filter signals (e.g., 'cpu.*', 'top\\.m1\\.*')",
-                            "default": "",
-                        },
+        Tool(
+            name="get_signal_list",
+            description="Get hierarchical list of signals from waveform file",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "waveform_file": {
+                        "type": "string",
+                        "description": "Path to waveform file (.vcd, .fst, etc.)",
                     },
-                    "required": ["waveform_file"],
-                },
-            ),
-            Tool(
-                name="get_signal_transitions",
-                description="Get signal transitions within a time range",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "waveform_file": {
-                            "type": "string",
-                            "description": "Path to waveform file",
-                        },
-                        "signal_name": {
-                            "type": "string",
-                            "description": "Full signal name (e.g., 'cpu.pc')",
-                        },
-                        "start_time": {
-                            "type": "integer",
-                            "description": "Start time in simulation time units",
-                            "default": 0,
-                        },
-                        "end_time": {
-                            "type": "integer",
-                            "description": "End time in simulation time units (0 = end of simulation)",
-                            "default": 0,
-                        },
+                    "pattern": {
+                        "type": "string",
+                        "description": "Optional regex pattern to filter signals (e.g., 'cpu.*', 'top\\.m1\\.*')",
+                        "default": "",
                     },
-                    "required": ["waveform_file", "signal_name"],
                 },
-            ),
-            Tool(
-                name="get_waveform_length",
-                description="Get the length of the waveform file",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "waveform_file": {
-                            "type": "string",
-                            "description": "Path to waveform file",
-                        },
+                "required": ["waveform_file"],
+            },
+        ),
+        Tool(
+            name="get_signal_transitions",
+            description="Get signal transitions within a time range",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "waveform_file": {
+                        "type": "string",
+                        "description": "Path to waveform file",
                     },
-                    "required": ["waveform_file"],
+                    "signal_name": {
+                        "type": "string",
+                        "description": "Full signal name (e.g., 'cpu.pc')",
+                    },
+                    "start_time": {
+                        "type": "integer",
+                        "description": "Start time in simulation time units",
+                        "default": 0,
+                    },
+                    "end_time": {
+                        "type": "integer",
+                        "description": "End time in simulation time units (0 = end of simulation)",
+                        "default": 0,
+                    },
                 },
-            ),
-            Tool(
-                name="execute_wal_expression",
-                description="""Execute WAL (Waveform Analysis Language) expressions for advanced signal analysis.
-                
+                "required": ["waveform_file", "signal_name"],
+            },
+        ),
+        Tool(
+            name="get_waveform_length",
+            description="Get the length of the waveform file",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "waveform_file": {
+                        "type": "string",
+                        "description": "Path to waveform file",
+                    },
+                },
+                "required": ["waveform_file"],
+            },
+        ),
+        Tool(
+            name="execute_wal_expression",
+            description="""Execute WAL (Waveform Analysis Language) expressions for advanced signal analysis.
+
 WAL is a functional language with Lisp-like syntax. Key capabilities:
-• Signal access: SIGNALS (list all), signal_name (get value)  
+• Signal access: SIGNALS (list all), signal_name (get value)
 • Time navigation: (step N), INDEX, (find condition)
 • Search/filter: (find condition), (count condition)
 • Logic: (and), (or), (not), (=), (!=), (<), (>)
@@ -261,49 +257,49 @@ Examples:
 • (find (= overflow 1)) - Find overflow events
 
 Use get_wal_help for detailed documentation and examples.""",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "waveform_file": {
-                            "type": "string",
-                            "description": "Path to waveform file",
-                        },
-                        "expression": {
-                            "type": "string",
-                            "description": "WAL expression to execute",
-                        },
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "waveform_file": {
+                        "type": "string",
+                        "description": "Path to waveform file",
                     },
-                    "required": ["waveform_file", "expression"],
-                },
-            ),
-            Tool(
-                name="get_wal_help",
-                description="Get WAL (Waveform Analysis Language) documentation and examples",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "topic": {
-                            "type": "string",
-                            "description": "Help topic: 'overview', 'functions', 'examples', 'debugging', 'syntax'",
-                            "default": "overview",
-                        },
+                    "expression": {
+                        "type": "string",
+                        "description": "WAL expression to execute",
                     },
                 },
-            ),
-            Tool(
-                name="get_wal_examples",
-                description="Get WAL examples customized for specific waveform signals",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "waveform_file": {
-                            "type": "string",
-                            "description": "Path to waveform file",
-                        },
+                "required": ["waveform_file", "expression"],
+            },
+        ),
+        Tool(
+            name="get_wal_help",
+            description="Get WAL (Waveform Analysis Language) documentation and examples",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Help topic: 'overview', 'functions', 'examples', 'debugging', 'syntax'",
+                        "default": "overview",
                     },
-                    "required": ["waveform_file"],
                 },
-            ),
+            },
+        ),
+        Tool(
+            name="get_wal_examples",
+            description="Get WAL examples customized for specific waveform signals",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "waveform_file": {
+                        "type": "string",
+                        "description": "Path to waveform file",
+                    },
+                },
+                "required": ["waveform_file"],
+            },
+        ),
     ]
 
 
@@ -338,7 +334,7 @@ async def _load_waveform(waveform_file: str) -> TraceContainer:
 
     Returns:
         TraceContainer: WAL container with loaded waveform data
-    
+
     Raises:
         FileNotFoundError: If the waveform file does not exist.
         ValueError: If the waveform_file path is empty.
@@ -363,7 +359,9 @@ async def _load_waveform(waveform_file: str) -> TraceContainer:
             logger.debug(f"Using cached waveform: {waveform_file}")
             return container
         else:
-            logger.info(f"Waveform file {waveform_file} changed (mtime: {cached_mtime} -> {current_mtime}), reloading...")
+            logger.info(
+                f"Waveform file {waveform_file} changed (mtime: {cached_mtime} -> {current_mtime}), reloading..."
+            )
 
     # Load fresh copy
     logger.info(f"Loading waveform file: {waveform_file}")
@@ -375,7 +373,7 @@ async def _load_waveform(waveform_file: str) -> TraceContainer:
     except Exception as e:
         logger.error(f"Failed to load waveform file {waveform_file}: {e}")
         raise
-    
+
     return container
 
 
@@ -427,14 +425,17 @@ async def _get_signal_list(args: Dict[str, Any]) -> List[TextContent]:
         result_lines = [
             f"Signals in {waveform_file}:",
             f"Invalid regex pattern '{pattern}': {e}",
-            "Please provide a valid regex pattern."
+            "Please provide a valid regex pattern.",
         ]
     except Exception as e:
-        return [TextContent(type="text", text=f"Error processing waveform file '{waveform_file}': {e}")]
+        return [
+            TextContent(
+                type="text",
+                text=f"Error processing waveform file '{waveform_file}': {e}",
+            )
+        ]
 
     return [TextContent(type="text", text="\n".join(result_lines))]
-
-
 
 
 async def _get_signal_transitions(args: Dict[str, Any]) -> List[TextContent]:
@@ -464,10 +465,12 @@ async def _get_signal_transitions(args: Dict[str, Any]) -> List[TextContent]:
         container = await _load_waveform(waveform_file)
 
         if signal_name not in container.signals:
-            return [TextContent(
-                type="text",
-                text=f"Error: Signal '{signal_name}' not found in {waveform_file}"
-            )]
+            return [
+                TextContent(
+                    type="text",
+                    text=f"Error: Signal '{signal_name}' not found in {waveform_file}",
+                )
+            ]
 
         result_lines = [f"Signal analysis for '{signal_name}':"]
         width = container.signal_width(signal_name)
@@ -494,7 +497,9 @@ async def _get_signal_transitions(args: Dict[str, Any]) -> List[TextContent]:
                 curr_value = container.signal_value(signal_name)
 
                 if prev_value != curr_value:
-                    transitions.append(f"  Time {current_time}: {prev_value} -> {curr_value}")
+                    transitions.append(
+                        f"  Time {current_time}: {prev_value} -> {curr_value}"
+                    )
                 prev_value = curr_value
 
             except Exception:
@@ -520,8 +525,6 @@ async def _get_signal_transitions(args: Dict[str, Any]) -> List[TextContent]:
     return [TextContent(type="text", text="\n".join(result_lines))]
 
 
-
-
 async def _get_waveform_length(args: Dict[str, Any]) -> List[TextContent]:
     """Get the length of the waveform file.
 
@@ -541,12 +544,12 @@ async def _get_waveform_length(args: Dict[str, Any]) -> List[TextContent]:
         container = await _load_waveform(waveform_file)
         evaluator = SEval(container)
         waveform_length = evaluator.eval(read_wal_sexpr("(length (find true))"))
-        
+
         result_lines = [
             f"Waveform file: {waveform_file}",
             f"Length: {waveform_length} time steps",
             f"Time range: 0 to {waveform_length - 1}",
-            f"Method: WAL (length (find true))"
+            f"Method: WAL (length (find true))",
         ]
 
     except (FileNotFoundError, ValueError) as e:
@@ -554,12 +557,10 @@ async def _get_waveform_length(args: Dict[str, Any]) -> List[TextContent]:
     except Exception as e:
         result_lines = [
             f"Waveform file: {waveform_file}",
-            f"Error getting waveform length: {str(e)}"
+            f"Error getting waveform length: {str(e)}",
         ]
 
     return [TextContent(type="text", text="\n".join(result_lines))]
-
-
 
 
 async def _execute_wal_expression(args: Dict[str, Any]) -> List[TextContent]:
@@ -592,7 +593,7 @@ async def _execute_wal_expression(args: Dict[str, Any]) -> List[TextContent]:
             f"Waveform file: {waveform_file}",
             "",
             f"Result: {result}",
-            f"Result type: {type(result).__name__}"
+            f"Result type: {type(result).__name__}",
         ]
 
         if isinstance(result, list) and len(result) > 5:
@@ -607,9 +608,13 @@ async def _execute_wal_expression(args: Dict[str, Any]) -> List[TextContent]:
         return [TextContent(type="text", text=f"Error: {e}")]
     except Exception as e:
         # Get signal-specific suggestions
-        all_signals = list(_waveform_cache[waveform_file][1].signals) if waveform_file in _waveform_cache else []
+        all_signals = (
+            list(_waveform_cache[waveform_file][1].signals)
+            if waveform_file in _waveform_cache
+            else []
+        )
         suggestions = _get_wal_error_suggestions(str(e), all_signals)
-        
+
         result_lines = [
             f"WAL Expression: {expression}",
             f"Waveform file: {waveform_file}",
@@ -618,12 +623,10 @@ async def _execute_wal_expression(args: Dict[str, Any]) -> List[TextContent]:
             "",
             *suggestions,
             "",
-            "For more help: use get_wal_help with topics 'examples', 'functions', or 'debugging'"
+            "For more help: use get_wal_help with topics 'examples', 'functions', or 'debugging'",
         ]
 
     return [TextContent(type="text", text="\n".join(result_lines))]
-
-
 
 
 async def _get_wal_help(args: Dict[str, Any]) -> List[TextContent]:
@@ -637,16 +640,18 @@ async def _get_wal_help(args: Dict[str, Any]) -> List[TextContent]:
         List of TextContent with WAL documentation
     """
     topic = args.get("topic", "overview")
-    
+
     if topic not in WAL_DOCUMENTATION:
         available_topics = ", ".join(WAL_DOCUMENTATION.keys())
-        return [TextContent(
-            type="text",
-            text=f"Unknown topic '{topic}'. Available topics: {available_topics}"
-        )]
-    
+        return [
+            TextContent(
+                type="text",
+                text=f"Unknown topic '{topic}'. Available topics: {available_topics}",
+            )
+        ]
+
     content = WAL_DOCUMENTATION[topic]
-    
+
     # Add topic header and navigation info
     result_lines = [
         f"WAL Help - {topic.title()}",
@@ -654,53 +659,61 @@ async def _get_wal_help(args: Dict[str, Any]) -> List[TextContent]:
         content.strip(),
         "",
         f"Available topics: {', '.join(WAL_DOCUMENTATION.keys())}",
-        "Use get_wal_help with different topic for more information."
+        "Use get_wal_help with different topic for more information.",
     ]
-    
+
     return [TextContent(type="text", text="\n".join(result_lines))]
 
 
 def _get_wal_error_suggestions(error_msg: str, signals: list) -> List[str]:
     """Generate helpful WAL suggestions based on error message and available signals."""
     suggestions = []
-    
+
     if "undefined" in error_msg.lower():
-        suggestions.extend([
-            "Variable/function not found. Try:",
-            "• Check signal names with SIGNALS",
-            "• Use exact signal names from your waveform",
-            f"• Available signals: {', '.join(signals[:5])}{'...' if len(signals) > 5 else ''}"
-        ])
-    
+        suggestions.extend(
+            [
+                "Variable/function not found. Try:",
+                "• Check signal names with SIGNALS",
+                "• Use exact signal names from your waveform",
+                f"• Available signals: {', '.join(signals[:5])}{'...' if len(signals) > 5 else ''}",
+            ]
+        )
+
     if "argument must be a list" in error_msg.lower():
-        suggestions.extend([
-            "Function expects a list. Try:",
-            "• (find condition) returns a list of time indices",
-            "• (length (find condition)) to count matches",
-            f"• Use signal names directly: {signals[0] if signals else 'signal_name'}"
-        ])
-    
+        suggestions.extend(
+            [
+                "Function expects a list. Try:",
+                "• (find condition) returns a list of time indices",
+                "• (length (find condition)) to count matches",
+                f"• Use signal names directly: {signals[0] if signals else 'signal_name'}",
+            ]
+        )
+
     if not suggestions:
         # Generic suggestions
-        suggestions.extend([
-            "Common WAL patterns to try:",
-            "• SIGNALS - List all signal names",
-            "• (find (= signal_name value)) - Find when signal equals value",
-            "• (count condition) - Count occurrences",
-            "• (length (find true)) - Total simulation length"
-        ])
-    
+        suggestions.extend(
+            [
+                "Common WAL patterns to try:",
+                "• SIGNALS - List all signal names",
+                "• (find (= signal_name value)) - Find when signal equals value",
+                "• (count condition) - Count occurrences",
+                "• (length (find true)) - Total simulation length",
+            ]
+        )
+
     # Add signal-specific examples
     if signals:
         first_signal = signals[0]
-        suggestions.extend([
-            "",
-            f"Examples with your signals (using '{first_signal}'):",
-            f"• (find (= {first_signal} 1)) - Find when {first_signal} is high",
-            f"• (count (= {first_signal} 0)) - Count when {first_signal} is low",
-            f"• (length (find (!= {first_signal} 0))) - Time steps when {first_signal} != 0"
-        ])
-    
+        suggestions.extend(
+            [
+                "",
+                f"Examples with your signals (using '{first_signal}'):",
+                f"• (find (= {first_signal} 1)) - Find when {first_signal} is high",
+                f"• (count (= {first_signal} 0)) - Count when {first_signal} is low",
+                f"• (length (find (!= {first_signal} 0))) - Time steps when {first_signal} != 0",
+            ]
+        )
+
     return suggestions
 
 
@@ -715,106 +728,123 @@ async def _get_wal_examples(args: Dict[str, Any]) -> List[TextContent]:
         List of TextContent with signal-specific WAL examples
     """
     waveform_file = args["waveform_file"]
-    
+
     try:
         container = await _load_waveform(waveform_file)
         all_signals = list(container.signals)
-        
+
         if not all_signals:
-            return [TextContent(
-                type="text", 
-                text="No signals found in waveform file"
-            )]
-        
+            return [TextContent(type="text", text="No signals found in waveform file")]
+
         # Categorize signals by type for better examples
-        clock_signals = [s for s in all_signals if 'clk' in s.lower()]
-        reset_signals = [s for s in all_signals if 'reset' in s.lower() or 'rst' in s.lower()]
-        counter_signals = [s for s in all_signals if 'counter' in s.lower() or 'count' in s.lower()]
-        data_signals = [s for s in all_signals if s not in clock_signals + reset_signals + counter_signals]
-        
+        clock_signals = [s for s in all_signals if "clk" in s.lower()]
+        reset_signals = [
+            s for s in all_signals if "reset" in s.lower() or "rst" in s.lower()
+        ]
+        counter_signals = [
+            s for s in all_signals if "counter" in s.lower() or "count" in s.lower()
+        ]
+        data_signals = [
+            s
+            for s in all_signals
+            if s not in clock_signals + reset_signals + counter_signals
+        ]
+
         result_lines = [
             f"WAL Examples for {waveform_file}",
             "=" * 60,
             f"Available signals: {len(all_signals)} total",
-            ""
+            "",
         ]
-        
+
         # Basic signal access examples
-        result_lines.extend([
-            "BASIC SIGNAL ACCESS:",
-            "• SIGNALS - List all signals in waveform",
-            f"• {all_signals[0]} - Get current value of {all_signals[0]}",
-            "• INDEX - Current time index",
-            "• (length (find true)) - Total simulation length",
-            ""
-        ])
-        
+        result_lines.extend(
+            [
+                "BASIC SIGNAL ACCESS:",
+                "• SIGNALS - List all signals in waveform",
+                f"• {all_signals[0]} - Get current value of {all_signals[0]}",
+                "• INDEX - Current time index",
+                "• (length (find true)) - Total simulation length",
+                "",
+            ]
+        )
+
         # Clock-specific examples
         if clock_signals:
             clk = clock_signals[0]
-            result_lines.extend([
-                f"CLOCK ANALYSIS (using {clk}):",
-                f"• (find (= {clk} 1)) - Find all clock high times",
-                f"• (length (find (= {clk} 1))) - Count clock high periods",
-                f"• (step 0) (find (= {clk} 1)) - Go to start, find clock highs",
-                ""
-            ])
-        
-        # Reset-specific examples  
+            result_lines.extend(
+                [
+                    f"CLOCK ANALYSIS (using {clk}):",
+                    f"• (find (= {clk} 1)) - Find all clock high times",
+                    f"• (length (find (= {clk} 1))) - Count clock high periods",
+                    f"• (step 0) (find (= {clk} 1)) - Go to start, find clock highs",
+                    "",
+                ]
+            )
+
+        # Reset-specific examples
         if reset_signals:
             rst = reset_signals[0]
-            result_lines.extend([
-                f"RESET ANALYSIS (using {rst}):",
-                f"• (find (= {rst} 1)) - Find reset assertion times",
-                f"• (find (= {rst} 0)) - Find reset deassertion times",
-                f"• (length (find (= {rst} 1))) - Total reset duration",
-                ""
-            ])
-        
+            result_lines.extend(
+                [
+                    f"RESET ANALYSIS (using {rst}):",
+                    f"• (find (= {rst} 1)) - Find reset assertion times",
+                    f"• (find (= {rst} 0)) - Find reset deassertion times",
+                    f"• (length (find (= {rst} 1))) - Total reset duration",
+                    "",
+                ]
+            )
+
         # Counter-specific examples
         if counter_signals:
             cnt = counter_signals[0]
-            result_lines.extend([
-                f"COUNTER ANALYSIS (using {cnt}):",
-                f"• (find (= {cnt} 0)) - Find when counter is zero",
-                f"• (find (> {cnt} 10)) - Find when counter > 10",
-                f"• (length (find (>= {cnt} 1))) - Non-zero periods",
-                ""
-            ])
-        
+            result_lines.extend(
+                [
+                    f"COUNTER ANALYSIS (using {cnt}):",
+                    f"• (find (= {cnt} 0)) - Find when counter is zero",
+                    f"• (find (> {cnt} 10)) - Find when counter > 10",
+                    f"• (length (find (>= {cnt} 1))) - Non-zero periods",
+                    "",
+                ]
+            )
+
         # Multi-signal analysis examples
         if len(all_signals) >= 2:
             sig1, sig2 = all_signals[0], all_signals[1]
-            result_lines.extend([
-                f"MULTI-SIGNAL PATTERNS:",
-                f"• (find (&& (= {sig1} 1) (= {sig2} 0))) - {sig1} high AND {sig2} low",
-                f"• (find (|| (= {sig1} 1) (= {sig2} 1))) - Either signal high",
-                f"• (find (&& (>= {sig1} 1) (>= {sig2} 1))) - Both signals non-zero",
-                ""
-            ])
-        
+            result_lines.extend(
+                [
+                    f"MULTI-SIGNAL PATTERNS:",
+                    f"• (find (&& (= {sig1} 1) (= {sig2} 0))) - {sig1} high AND {sig2} low",
+                    f"• (find (|| (= {sig1} 1) (= {sig2} 1))) - Either signal high",
+                    f"• (find (&& (>= {sig1} 1) (>= {sig2} 1))) - Both signals non-zero",
+                    "",
+                ]
+            )
+
         # Debugging patterns
-        result_lines.extend([
-            "DEBUGGING PATTERNS:",
-            f"• (find (= overflow 1)) - Find overflow events (if overflow signal exists)",
-            f"• (find (&& (= valid 1) (= ready 0))) - Handshake stalls (if protocol signals exist)",
-            f"• (length (find (> {all_signals[-1]} 15))) - Values out of range (example: >15)",
-            "",
-            "TIMING ANALYSIS:",
-            f"• (step 0) INDEX - Go to start and show time",
-            f"• (step 10) {all_signals[0]} - Advance 10 steps and show signal value",
-            f"• (find (= {all_signals[0]} target)) - Find specific signal values",
-            "",
-            "For more help: use get_wal_help with topics 'functions', 'debugging', or 'syntax'"
-        ])
-        
+        result_lines.extend(
+            [
+                "DEBUGGING PATTERNS:",
+                f"• (find (= overflow 1)) - Find overflow events (if overflow signal exists)",
+                f"• (find (&& (= valid 1) (= ready 0))) - Handshake stalls (if protocol signals exist)",
+                f"• (length (find (> {all_signals[-1]} 15))) - Values out of range (example: >15)",
+                "",
+                "TIMING ANALYSIS:",
+                f"• (step 0) INDEX - Go to start and show time",
+                f"• (step 10) {all_signals[0]} - Advance 10 steps and show signal value",
+                f"• (find (= {all_signals[0]} target)) - Find specific signal values",
+                "",
+                "For more help: use get_wal_help with topics 'functions', 'debugging', or 'syntax'",
+            ]
+        )
+
     except Exception as e:
         result_lines = [
             f"Error loading waveform {waveform_file}: {str(e)}",
             "",
-            "Use get_wal_help for general WAL documentation"
+            "Use get_wal_help for general WAL documentation",
         ]
-    
+
     return [TextContent(type="text", text="\n".join(result_lines))]
 
 
