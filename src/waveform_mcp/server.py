@@ -818,25 +818,30 @@ async def _get_wal_examples(args: Dict[str, Any]) -> List[TextContent]:
     return [TextContent(type="text", text="\n".join(result_lines))]
 
 
-async def main():
+def main():
     """Main entry point for the MCP server.
 
     Starts the server using stdio transport for communication with MCP clients.
     """
-    async with stdio_server() as (read_stream, write_stream):
-        await app.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="waveform-mcp",
-                server_version="0.1.0",
-                capabilities=app.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
+
+    async def _main():
+        async with stdio_server() as (read_stream, write_stream):
+            await app.run(
+                read_stream,
+                write_stream,
+                InitializationOptions(
+                    server_name="waveform-mcp",
+                    server_version="0.1.0",
+                    capabilities=app.get_capabilities(
+                        notification_options=NotificationOptions(),
+                        experimental_capabilities={},
+                    ),
                 ),
-            ),
-        )
+            )
+
+    asyncio.run(_main())
 
 
 if __name__ == "__main__":
+    main()
     asyncio.run(main())
