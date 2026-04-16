@@ -6,6 +6,7 @@ allowing LLMs to inspect signals, detect transitions, and debug hardware designs
 Supported formats: VCD, FST (via WAL)
 """
 
+import argparse
 import asyncio
 import logging
 import os
@@ -19,6 +20,8 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 from wal.core import TraceContainer, read_wal_sexpr
 from wal.eval import SEval
+
+from wal_mcp import __version__
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -846,30 +849,41 @@ async def _get_wal_examples(args: dict[str, Any]) -> list[TextContent]:
     return [TextContent(type="text", text="\n".join(result_lines))]
 
 
+async def _main():
+    async with stdio_server() as (read_stream, write_stream):
+        await app.run(
+            read_stream,
+            write_stream,
+            InitializationOptions(
+                server_name="wal-mcp",
+                server_version="0.1.0",
+                capabilities=app.get_capabilities(
+                    notification_options=NotificationOptions(),
+                    experimental_capabilities={},
+                ),
+            ),
+        )
+
+
 def main():
     """Main entry point for the MCP server.
 
     Starts the server using stdio transport for communication with MCP clients.
     """
+    argparser = argparse.ArgumentParser(
+        description="MCP server for RTL waveform analysis using WAL"
+    )
+    argparser.add_argument(
+        "--version", action="store_true", help="Show server version and exit"
+    )
 
-    async def _main():
-        async with stdio_server() as (read_stream, write_stream):
-            await app.run(
-                read_stream,
-                write_stream,
-                InitializationOptions(
-                    server_name="wal-mcp",
-                    server_version="0.1.0",
-                    capabilities=app.get_capabilities(
-                        notification_options=NotificationOptions(),
-                        experimental_capabilities={},
-                    ),
-                ),
-            )
+    args = argparser.parse_args()
+    if args.version:
+        print(f"wal-mcp version {__version__}")
+        return
 
     asyncio.run(_main())
 
 
 if __name__ == "__main__":
     main()
-    asyncio.run(main())
