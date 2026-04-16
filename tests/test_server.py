@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from waveform_mcp import server
+from wal_mcp import server
 from mcp.types import TextContent
 
 # Paths to the sample waveform files

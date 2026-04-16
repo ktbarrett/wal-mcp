@@ -25,7 +25,7 @@ from wal.core import read_wal_sexpr
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-app = Server("waveform-mcp")
+app = Server("wal-mcp")
 
 # Cache: {file_path: (modification_time, TraceContainer)}
 _waveform_cache: Dict[str, Tuple[float, TraceContainer]] = {}
@@ -860,7 +860,7 @@ def main():
                 read_stream,
                 write_stream,
                 InitializationOptions(
-                    server_name="waveform-mcp",
+                    server_name="wal-mcp",
                     server_version="0.1.0",
                     capabilities=app.get_capabilities(
                         notification_options=NotificationOptions(),

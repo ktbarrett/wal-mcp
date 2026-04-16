@@ -104,7 +104,7 @@ Add to your MCP client configuration:
   "mcpServers": {
     "waveform": {
       "type": "stdio",
-      "command": "waveform-mcp",
+      "command": "wal-mcp",
       "args": []
     }
   }
