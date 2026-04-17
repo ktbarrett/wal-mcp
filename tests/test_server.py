@@ -1,6 +1,4 @@
 import os
-
-# Make sure the server module is importable
 import sys
 from unittest.mock import AsyncMock, patch
 
@@ -21,130 +19,101 @@ WAVEFORM_FILES = [VCD_FILE, FST_FILE]
 
 
 @pytest.fixture(autouse=True)
-def clear_waveform_cache():
-    """Clear the waveform cache before each test."""
-    server._waveform_cache.clear()
+def clear_loaded_waveforms():
+    """Clear loaded waveforms before each test."""
+    server._loaded_waveforms.clear()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
 async def test_load_waveform(waveform_file):
-    """Test the _load_waveform function caches the result."""
-    assert len(server._waveform_cache) == 0
+    """Test loading a waveform file."""
+    assert len(server._loaded_waveforms) == 0
 
-    # First load
-    container = await server._load_waveform(waveform_file)
-    assert container is not None
-    assert len(server._waveform_cache) == 1
-    assert waveform_file in server._waveform_cache
+    result = await server._load_waveform({"waveform_file": waveform_file})
 
-    # Second load should be from cache
-    container2 = await server._load_waveform(waveform_file)
-    assert container2 is container  # Should be the same object
-    assert len(server._waveform_cache) == 1
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
-async def test_get_signal_list_all(waveform_file):
-    """Test get_signal_list without any pattern."""
-    args = {"waveform_file": waveform_file}
-    result = await server._get_signal_list(args)
-
-    assert isinstance(result, list)
     assert len(result) == 1
-    assert isinstance(result[0], TextContent)
+    assert f"Loaded waveform: {waveform_file}" in result[0].text
+    assert waveform_file in server._loaded_waveforms
 
-    text = result[0].text
-    assert f"Signals in {waveform_file}:" in text
-    assert "tb.clk [1 bit]" in text
-    assert "tb.reset [1 bit]" in text
-    assert "tb.dut.counter [4 bits]" in text
+
+@pytest.mark.asyncio
+async def test_load_waveform_invalid_path():
+    """Test loading a nonexistent waveform file."""
+    result = await server._load_waveform(
+        {"waveform_file": "/nonexistent/path/file.vcd"}
+    )
+
+    assert "Error:" in result[0].text
+    assert len(server._loaded_waveforms) == 0
+
+
+@pytest.mark.asyncio
+async def test_load_waveform_empty_path():
+    """Test loading with an empty path."""
+    result = await server._load_waveform({"waveform_file": ""})
+
+    assert "Error:" in result[0].text
+    assert "empty" in result[0].text.lower()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
-async def test_get_signal_list_with_pattern(waveform_file):
-    """Test get_signal_list with a regex pattern."""
-    args = {"waveform_file": waveform_file, "pattern": "tb\\.dut"}
-    result = await server._get_signal_list(args)
+async def test_load_waveform_reload(waveform_file):
+    """Test that reloading replaces the entry."""
+    await server._load_waveform({"waveform_file": waveform_file})
+    first_container = server._loaded_waveforms[waveform_file]
 
-    text = result[0].text
-    assert "Filter pattern: tb\\.dut" in text
-    assert "tb.dut.counter [4 bits]" in text
-    assert "tb.clk" not in text
+    await server._load_waveform({"waveform_file": waveform_file})
+    second_container = server._loaded_waveforms[waveform_file]
 
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
-async def test_get_signal_list_no_match(waveform_file):
-    """Test get_signal_list with a pattern that matches nothing."""
-    args = {"waveform_file": waveform_file, "pattern": "nonexistent"}
-    result = await server._get_signal_list(args)
-
-    text = result[0].text
-    assert "No signals found matching regex pattern." in text
+    assert first_container is not second_container
+    assert len(server._loaded_waveforms) == 1
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
-async def test_get_signal_list_invalid_regex(waveform_file):
-    """Test get_signal_list with an invalid regex pattern."""
-    args = {"waveform_file": waveform_file, "pattern": "["}
-    result = await server._get_signal_list(args)
+async def test_unload_waveform(waveform_file):
+    """Test unloading a loaded waveform."""
+    await server._load_waveform({"waveform_file": waveform_file})
+    assert waveform_file in server._loaded_waveforms
 
-    text = result[0].text
-    assert "Invalid regex pattern '['" in text
+    result = await server._unload_waveform({"waveform_file": waveform_file})
 
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
-async def test_get_waveform_length(waveform_file):
-    """Test get_waveform_length."""
-    args = {"waveform_file": waveform_file}
-    result = await server._get_waveform_length(args)
-
-    text = result[0].text
-    assert "Length: 81 time steps" in text
-    assert "Time range: 0 to 80" in text
+    assert f"Unloaded waveform: {waveform_file}" in result[0].text
+    assert waveform_file not in server._loaded_waveforms
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
-async def test_get_signal_transitions_exists(waveform_file):
-    """Test get_signal_transitions for a signal that exists."""
-    args = {"waveform_file": waveform_file, "signal_name": "tb.clk"}
-    result = await server._get_signal_transitions(args)
+async def test_unload_waveform_not_loaded():
+    """Test unloading a waveform that isn't loaded."""
+    result = await server._unload_waveform({"waveform_file": "/not/loaded.vcd"})
 
-    text = result[0].text
-    assert "Signal analysis for 'tb.clk'" in text
-    assert "Width: 1 bit" in text
-    assert "Initial value at time 0: 0" in text
-    assert "Transitions detected:" in text
-    assert "Time 1: 0 -> 1" in text
-    assert "Time 2: 1 -> 0" in text
+    assert "Error:" in result[0].text
+    assert "not loaded" in result[0].text.lower()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
-async def test_get_signal_transitions_not_exists(waveform_file):
-    """Test get_signal_transitions for a signal that does not exist."""
-    args = {"waveform_file": waveform_file, "signal_name": "nonexistent"}
-    result = await server._get_signal_transitions(args)
+async def test_unload_waveform_empty_path():
+    """Test unloading with an empty path."""
+    result = await server._unload_waveform({"waveform_file": ""})
 
-    text = result[0].text
-    assert "Error: Signal 'nonexistent' not found" in text
+    assert "Error:" in result[0].text
+    assert "empty" in result[0].text.lower()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
 async def test_execute_wal_expression_valid(waveform_file):
     """Test execute_wal_expression with a valid expression."""
-    args = {
-        "waveform_file": waveform_file,
-        "expression": "(length (find (= tb.clk 1)))",
-    }
-    result = await server._execute_wal_expression(args)
+    await server._load_waveform({"waveform_file": waveform_file})
+
+    result = await server._execute_wal_expression(
+        {
+            "waveform_file": waveform_file,
+            "expression": "(length (find (= tb.clk 1)))",
+        }
+    )
 
     text = result[0].text
     assert "WAL Expression: (length (find (= tb.clk 1)))" in text
@@ -156,11 +125,14 @@ async def test_execute_wal_expression_valid(waveform_file):
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
 async def test_execute_wal_expression_invalid_syntax(waveform_file):
     """Test execute_wal_expression with invalid syntax."""
-    args = {
-        "waveform_file": waveform_file,
-        "expression": "(count (= tb.clk 1)",  # Missing closing parenthesis
-    }
-    result = await server._execute_wal_expression(args)
+    await server._load_waveform({"waveform_file": waveform_file})
+
+    result = await server._execute_wal_expression(
+        {
+            "waveform_file": waveform_file,
+            "expression": "(count (= tb.clk 1)",
+        }
+    )
 
     text = result[0].text
     assert "Execution Error:" in text
@@ -170,11 +142,14 @@ async def test_execute_wal_expression_invalid_syntax(waveform_file):
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
 async def test_execute_wal_expression_undefined_signal(waveform_file):
     """Test execute_wal_expression with an undefined signal."""
-    args = {
-        "waveform_file": waveform_file,
-        "expression": "(find (= non_existent_signal 1))",
-    }
-    result = await server._execute_wal_expression(args)
+    await server._load_waveform({"waveform_file": waveform_file})
+
+    result = await server._execute_wal_expression(
+        {
+            "waveform_file": waveform_file,
+            "expression": "(find (= non_existent_signal 1))",
+        }
+    )
 
     text = result[0].text
     assert "Execution Error:" in text
@@ -182,17 +157,32 @@ async def test_execute_wal_expression_undefined_signal(waveform_file):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
-async def test_get_wal_examples(waveform_file):
-    """Test get_wal_examples."""
-    args = {"waveform_file": waveform_file}
-    result = await server._get_wal_examples(args)
+async def test_execute_wal_not_loaded(waveform_file):
+    """Test execute_wal_expression when waveform is not loaded."""
+    result = await server._execute_wal_expression(
+        {
+            "waveform_file": waveform_file,
+            "expression": "(length (find true))",
+        }
+    )
 
     text = result[0].text
-    assert f"WAL Examples for {waveform_file}" in text
-    assert "BASIC SIGNAL ACCESS:" in text
-    assert "CLOCK ANALYSIS (using tb.clk):" in text
-    assert "RESET ANALYSIS (using tb.reset):" in text
-    assert "COUNTER ANALYSIS (using tb.dut.counter):" in text
+    assert "not loaded" in text.lower()
+    assert "load_waveform" in text
+
+
+@pytest.mark.asyncio
+async def test_execute_wal_expression_empty_expression():
+    """Test execute_wal_expression with an empty expression."""
+    result = await server._execute_wal_expression(
+        {
+            "waveform_file": VCD_FILE,
+            "expression": "",
+        }
+    )
+
+    assert "Error:" in result[0].text
+    assert "empty" in result[0].text.lower()
 
 
 @pytest.mark.asyncio
@@ -200,11 +190,9 @@ async def test_list_tools_return_format():
     """Test that list_tools returns proper List[Tool] format."""
     tools = await server.list_tools()
 
-    # Should return a list of Tool objects
     assert isinstance(tools, list)
-    assert len(tools) == 5  # We have 5 tools defined
+    assert len(tools) == 3
 
-    # Check that all items are Tool objects with required fields
     for tool in tools:
         assert hasattr(tool, "name")
         assert hasattr(tool, "description")
@@ -213,101 +201,20 @@ async def test_list_tools_return_format():
         assert isinstance(tool.description, str)
         assert isinstance(tool.inputSchema, dict)
 
-    # Verify specific tool names exist
     tool_names = [tool.name for tool in tools]
-    expected_tools = [
-        "get_signal_list",
-        "get_signal_transitions",
-        "get_waveform_length",
-        "execute_wal_expression",
-        "get_wal_examples",
-    ]
+    expected_tools = ["load_waveform", "unload_waveform", "execute_wal_expression"]
     for expected_tool in expected_tools:
         assert expected_tool in tool_names
 
 
 @pytest.mark.asyncio
-async def test_invalid_waveform_file_paths():
-    """Test behavior with invalid waveform file paths."""
-    invalid_paths = [
-        "/nonexistent/path/file.vcd",
-        "not_a_real_file.fst",
-        "",
-        "/tmp/corrupted.vcd",
-    ]
-
-    for invalid_path in invalid_paths:
-        # Test get_signal_list with invalid path
-        result = await server._get_signal_list({"waveform_file": invalid_path})
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert "Error:" in result[0].text or "error" in result[0].text.lower()
-
-        # Test get_waveform_length with invalid path
-        result = await server._get_waveform_length({"waveform_file": invalid_path})
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert "Error:" in result[0].text or "error" in result[0].text.lower()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
-async def test_signal_transitions_time_range_parameters(waveform_file):
-    """Test get_signal_transitions with different time range parameters."""
-    signal_name = "tb.clk"
-
-    # Test with start_time only
-    args = {"waveform_file": waveform_file, "signal_name": signal_name, "start_time": 5}
-    result = await server._get_signal_transitions(args)
-    text = result[0].text
-    assert "Initial value at time 5:" in text
-    assert "Time range analyzed: 5 to" in text
-
-    # Test with both start_time and end_time
-    args = {
-        "waveform_file": waveform_file,
-        "signal_name": signal_name,
-        "start_time": 10,
-        "end_time": 20,
-    }
-    result = await server._get_signal_transitions(args)
-    text = result[0].text
-    assert "Initial value at time 10:" in text
-    assert "Time range analyzed: 10 to 20" in text
-
-    # Test with end_time = 0 (should use full range)
-    args = {
-        "waveform_file": waveform_file,
-        "signal_name": signal_name,
-        "start_time": 0,
-        "end_time": 0,
-    }
-    result = await server._get_signal_transitions(args)
-    text = result[0].text
-    assert "Initial value at time 0:" in text
-    assert "Time range analyzed: 0 to 80" in text  # Based on known waveform length
-
-    # Test with invalid time range (start > end)
-    args = {
-        "waveform_file": waveform_file,
-        "signal_name": signal_name,
-        "start_time": 50,
-        "end_time": 30,
-    }
-    result = await server._get_signal_transitions(args)
-    text = result[0].text
-    assert "Time range analyzed: 50 to 30" in text
-    assert "No transitions detected" in text  # Should find no transitions
-
-
-@pytest.mark.asyncio
 async def test_call_tool_routing():
     """Test that call_tool routes to the correct function."""
-    mock_get_signals = AsyncMock(return_value=[TextContent(type="text", text="mocked")])
+    mock_handler = AsyncMock(return_value=[TextContent(type="text", text="mocked")])
 
-    with patch.dict(server._TOOL_HANDLERS, {"get_signal_list": mock_get_signals}):
-        await server.call_tool("get_signal_list", {})
-        mock_get_signals.assert_called_once()
+    with patch.dict(server._TOOL_HANDLERS, {"load_waveform": mock_handler}):
+        await server.call_tool("load_waveform", {})
+        mock_handler.assert_called_once()
 
     result = await server.call_tool("unknown_tool", {})
     assert "Unknown tool: unknown_tool" in result[0].text
@@ -316,59 +223,12 @@ async def test_call_tool_routing():
 @pytest.mark.asyncio
 async def test_call_tool_exception_handling():
     """Test that call_tool handles exceptions properly."""
-    # Test with invalid arguments that should cause an exception
-    result = await server.call_tool("get_signal_list", {"invalid_arg": "value"})
-    assert isinstance(result, list)
-    assert len(result) == 1
-    assert "Error:" in result[0].text
 
+    async def raise_error(_args):
+        raise RuntimeError("test error")
 
-@pytest.mark.asyncio
-async def test_corrupted_waveform_handling():
-    """Test error handling for corrupted/invalid waveform files."""
-    # Create a temporary file with invalid VCD content
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".vcd", delete=False) as f:
-        f.write("This is not a valid VCD file content")
-        temp_file = f.name
-
-        # Test various operations with corrupted file
-        result = await server._get_signal_list({"waveform_file": temp_file})
+    with patch.dict(server._TOOL_HANDLERS, {"load_waveform": raise_error}):
+        result = await server.call_tool("load_waveform", {})
         assert isinstance(result, list)
         assert len(result) == 1
-        text = result[0].text
-        assert "Error:" in text or "error" in text.lower() or "No signals found" in text
-
-        result = await server._get_waveform_length({"waveform_file": temp_file})
-        assert isinstance(result, list)
-        assert len(result) == 1
-        text = result[0].text
-        assert "Error:" in text or "error" in text.lower() or "Length:" in text
-
-        result = await server._get_signal_transitions(
-            {"waveform_file": temp_file, "signal_name": "any_signal"}
-        )
-        assert isinstance(result, list)
-        assert len(result) == 1
-        text = result[0].text
-        assert (
-            "Error:" in text or "error" in text.lower() or "not found" in text.lower()
-        )
-
-
-@pytest.mark.asyncio
-async def test_waveform_cache_error_handling():
-    """Test that waveform cache handles loading errors properly."""
-    # Test that failed loads don't pollute the cache
-    invalid_file = "/definitely/does/not/exist.vcd"
-
-    # Verify cache is empty initially
-    assert len(server._waveform_cache) == 0
-
-    # Try to load invalid file - should raise exception but not cache
-    with pytest.raises(FileNotFoundError):
-        await server._load_waveform(invalid_file)
-
-    # Cache should still be empty after failed load
-    assert len(server._waveform_cache) == 0
+        assert "Error:" in result[0].text
