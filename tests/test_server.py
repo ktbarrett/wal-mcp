@@ -363,7 +363,7 @@ async def test_waveform_cache_error_handling():
     assert len(server._waveform_cache) == 0
 
     # Try to load invalid file - should raise exception but not cache
-    with pytest.raises(Exception):
+    with pytest.raises(FileNotFoundError):
         await server._load_waveform(invalid_file)
 
     # Cache should still be empty after failed load

@@ -11,6 +11,7 @@ import asyncio
 import logging
 import os
 import re
+from collections.abc import Callable, Coroutine
 from typing import Any
 
 from mcp.server import Server
@@ -148,24 +149,16 @@ Use get_wal_help for detailed documentation and examples.""",
 
 
 @app.call_tool()
-async def call_tool(tool_name: str, arguments: dict[str, Any]):
+async def call_tool(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Route tool calls to appropriate handlers."""
+    handler = _TOOL_HANDLERS.get(tool_name)
+    if handler is None:
+        return [TextContent(type="text", text=f"Unknown tool: {tool_name}")]
     try:
-        if tool_name == "get_signal_list":
-            return await _get_signal_list(arguments)
-        elif tool_name == "get_signal_transitions":
-            return await _get_signal_transitions(arguments)
-        elif tool_name == "get_waveform_length":
-            return await _get_waveform_length(arguments)
-        elif tool_name == "execute_wal_expression":
-            return await _execute_wal_expression(arguments)
-        elif tool_name == "get_wal_examples":
-            return await _get_wal_examples(arguments)
-        else:
-            return [TextContent(type="text", text=f"Unknown tool: {tool_name}")]
+        return await handler(arguments)
     except Exception as e:
-        logger.error(f"Error in {tool_name}: {e}")
-        return [TextContent(type="text", text=f"Error: {str(e)}")]
+        logger.error("Error in %s: %s", tool_name, e)
+        return [TextContent(type="text", text=f"Error: {e}")]
 
 
 async def _load_waveform(waveform_file: str) -> TraceContainer:
@@ -188,32 +181,35 @@ async def _load_waveform(waveform_file: str) -> TraceContainer:
     try:
         current_mtime = os.path.getmtime(waveform_file)
     except FileNotFoundError:
-        logger.error(f"Waveform file not found: {waveform_file}")
+        logger.error("Waveform file not found: %s", waveform_file)
         raise
     except OSError as e:
-        logger.error(f"Error accessing waveform file {waveform_file}: {e}")
+        logger.error("Error accessing waveform file %s: %s", waveform_file, e)
         raise
 
     # Check if file is cached and still current
     if waveform_file in _waveform_cache:
         cached_mtime, container = _waveform_cache[waveform_file]
         if cached_mtime == current_mtime:
-            logger.debug(f"Using cached waveform: {waveform_file}")
+            logger.debug("Using cached waveform: %s", waveform_file)
             return container
         else:
             logger.info(
-                f"Waveform file {waveform_file} changed (mtime: {cached_mtime} -> {current_mtime}), reloading..."
+                "Waveform file %s changed (mtime: %s -> %s), reloading...",
+                waveform_file,
+                cached_mtime,
+                current_mtime,
             )
 
     # Load fresh copy
-    logger.info(f"Loading waveform file: {waveform_file}")
+    logger.info("Loading waveform file: %s", waveform_file)
     try:
         container = TraceContainer()
         container.load(waveform_file)
         _waveform_cache[waveform_file] = (current_mtime, container)
-        logger.debug(f"Cached waveform {waveform_file} with mtime: {current_mtime}")
+        logger.debug("Cached waveform %s with mtime: %s", waveform_file, current_mtime)
     except Exception as e:
-        logger.error(f"Failed to load waveform file {waveform_file}: {e}")
+        logger.error("Failed to load waveform file %s: %s", waveform_file, e)
         raise
 
     return container
@@ -234,9 +230,6 @@ async def _get_signal_list(args: dict[str, Any]) -> list[TextContent]:
     pattern = args.get("pattern", "")
 
     try:
-        if not waveform_file:
-            raise ValueError("Waveform file path cannot be empty.")
-
         container = await _load_waveform(waveform_file)
         all_signals = container.signals
 
@@ -299,8 +292,6 @@ async def _get_signal_transitions(args: dict[str, Any]) -> list[TextContent]:
     end_time = args.get("end_time", 0)
 
     try:
-        if not waveform_file:
-            raise ValueError("Waveform file path cannot be empty.")
         if not signal_name:
             raise ValueError("Signal name cannot be empty.")
 
@@ -345,6 +336,12 @@ async def _get_signal_transitions(args: dict[str, Any]) -> list[TextContent]:
                 prev_value = curr_value
 
             except Exception:
+                logger.debug(
+                    "Stopped iterating signal '%s' at time %s",
+                    signal_name,
+                    current_time,
+                    exc_info=True,
+                )
                 break
         if transitions:
             result_lines.append("")
@@ -380,9 +377,6 @@ async def _get_waveform_length(args: dict[str, Any]) -> list[TextContent]:
     waveform_file = args.get("waveform_file")
 
     try:
-        if not waveform_file:
-            raise ValueError("Waveform file path cannot be empty.")
-
         container = await _load_waveform(waveform_file)
         evaluator = SEval(container)
         waveform_length = evaluator.eval(read_wal_sexpr("(length (find true))"))
@@ -420,8 +414,6 @@ async def _execute_wal_expression(args: dict[str, Any]) -> list[TextContent]:
     expression = args.get("expression")
 
     try:
-        if not waveform_file:
-            raise ValueError("Waveform file path cannot be empty.")
         if not expression:
             raise ValueError("WAL expression cannot be empty.")
 
@@ -471,7 +463,7 @@ async def _execute_wal_expression(args: dict[str, Any]) -> list[TextContent]:
     return [TextContent(type="text", text="\n".join(result_lines))]
 
 
-def _get_wal_error_suggestions(error_msg: str, signals: list) -> list[str]:
+def _get_wal_error_suggestions(error_msg: str, signals: list[str]) -> list[str]:
     """Generate helpful WAL suggestions based on error message and available signals."""
     suggestions = []
 
@@ -549,11 +541,6 @@ async def _get_wal_examples(args: dict[str, Any]) -> list[TextContent]:
         ]
         counter_signals = [
             s for s in all_signals if "counter" in s.lower() or "count" in s.lower()
-        ]
-        [
-            s
-            for s in all_signals
-            if s not in clock_signals + reset_signals + counter_signals
         ]
 
         result_lines = [
@@ -654,6 +641,17 @@ async def _get_wal_examples(args: dict[str, Any]) -> list[TextContent]:
     return [TextContent(type="text", text="\n".join(result_lines))]
 
 
+_ToolHandler = Callable[[dict[str, Any]], Coroutine[Any, Any, list[TextContent]]]
+
+_TOOL_HANDLERS: dict[str, _ToolHandler] = {
+    "get_signal_list": _get_signal_list,
+    "get_signal_transitions": _get_signal_transitions,
+    "get_waveform_length": _get_waveform_length,
+    "execute_wal_expression": _execute_wal_expression,
+    "get_wal_examples": _get_wal_examples,
+}
+
+
 async def _main():
     async with stdio_server() as (read_stream, write_stream):
         await app.run(
@@ -661,7 +659,7 @@ async def _main():
             write_stream,
             InitializationOptions(
                 server_name="wal-mcp",
-                server_version="0.1.0",
+                server_version=__version__,
                 capabilities=app.get_capabilities(
                     notification_options=NotificationOptions(),
                     experimental_capabilities={},

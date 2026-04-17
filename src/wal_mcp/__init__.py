@@ -15,4 +15,3 @@ Supported formats: VCD, FST (via WAL)
 import importlib.metadata
 
 __version__ = importlib.metadata.version("wal-mcp")
-__author__ = "Yossi Nivin"
