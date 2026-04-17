@@ -181,26 +181,6 @@ async def test_execute_wal_expression_undefined_signal(waveform_file):
 
 
 @pytest.mark.asyncio
-async def test_get_wal_help():
-    """Test get_wal_help for different topics."""
-    # Default topic
-    result_default = await server._get_wal_help({})
-    text_default = result_default[0].text
-    assert "WAL Help - Overview" in text_default
-
-    # Specific topic
-    result_functions = await server._get_wal_help({"topic": "functions"})
-    text_functions = result_functions[0].text
-    assert "WAL Help - Functions" in text_functions
-    assert "Core WAL Functions" in text_functions
-
-    # Invalid topic
-    result_invalid = await server._get_wal_help({"topic": "invalid"})
-    text_invalid = result_invalid[0].text
-    assert "Unknown topic 'invalid'" in text_invalid
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
 async def test_get_wal_examples(waveform_file):
     """Test get_wal_examples."""

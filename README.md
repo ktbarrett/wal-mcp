@@ -45,15 +45,6 @@ Execute WAL expressions for advanced waveform analysis.
 {"tool": "execute_wal_expression", "arguments": {"waveform_file": "sim.vcd", "expression": "(find (= clk 1))"}}
 ```
 
-### get_wal_help
-Get comprehensive WAL documentation and syntax reference.
-- `topic` (optional): Help topic ('overview', 'functions', 'examples', 'debugging', 'syntax')
-
-**Example:**
-```json
-{"tool": "get_wal_help", "arguments": {"topic": "examples"}}
-```
-
 ### get_wal_examples
 Generate signal-specific WAL examples for your waveform.
 - `waveform_file` (required): Path to waveform file
@@ -104,7 +95,7 @@ Add to your MCP client configuration:
   "mcpServers": {
     "waveform": {
       "type": "stdio",
-      "command": "wal-mcp",
+      "command": "wal-mcp-server",
       "args": []
     }
   }

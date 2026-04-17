@@ -31,149 +31,6 @@ app = Server("wal-mcp")
 # Cache: {file_path: (modification_time, TraceContainer)}
 _waveform_cache: dict[str, tuple[float, TraceContainer]] = {}
 
-# WAL Documentation and Examples
-WAL_DOCUMENTATION = {
-    "overview": """
-WAL (Waveform Analysis Language) - Quick Reference
-
-WAL is a functional programming language designed for waveform analysis with Lisp-like syntax.
-All expressions use parentheses: (function arg1 arg2 ...)
-
-Key Concepts:
-• Signals: Access by name (e.g., 'clk', 'tb.counter')
-• Time: Navigate with (step N) or use INDEX for current time
-• Lists: Most operations return lists of values/times
-• Conditions: Use for filtering and searching
-""",
-    "functions": """
-Core WAL Functions for Waveform Analysis:
-
-TIME & NAVIGATION:
-• (step N) - Move N steps forward in time
-• INDEX - Current time index
-• (find condition) - Find all times where condition is true
-
-SIGNAL ACCESS:
-• SIGNALS - List of all signal names
-• signal_name - Access signal values at current time
-• (length signal_or_list) - Get length of signal timeline or list
-
-SEARCH & FILTER:
-• (find condition) - Returns list of time indices where condition is true
-• (count condition) - Count number of times condition is true
-• (= signal value) - Test if signal equals value
-• (!= signal value) - Test if signal not equal to value
-• (> signal value) - Test if signal greater than value
-• (< signal value) - Test if signal less than value
-
-LOGICAL OPERATIONS:
-• (&& cond1 cond2 ...) - Logical AND
-• (|| cond1 cond2 ...) - Logical OR
-• Note: 'and', 'or', 'not' are not available in this WAL implementation
-
-ARITHMETIC:
-• (+ arg1 arg2 ...) - Addition
-• (- arg1 arg2 ...) - Subtraction
-• (* arg1 arg2 ...) - Multiplication
-• (/ arg1 arg2 ...) - Division
-""",
-    "examples": """
-WAL Usage Examples:
-
-BASIC SIGNAL ACCESS:
-• SIGNALS - List all signals
-• clk - Get clock value at current time
-• (step 10) - Move 10 time steps forward
-
-TIME & COUNTING:
-• (length (find true)) - Total simulation length
-• (count (= clk 1)) - Count clock high periods
-• (count (= reset 0)) - Count time steps where reset is low
-
-SIGNAL TRANSITIONS:
-• (find (= clk 1)) - Find times when clock is high
-• (find (&& (= clk 0) (= data 1))) - Find times when clk=0 AND data=1
-• (find (|| (= sig1 1) (= sig2 1))) - Find times when either signal is high
-
-COMPLEX CONDITIONS:
-• (find (> counter 10)) - Find times when counter > 10
-• (find (&& (= clk 1) (> counter 5))) - Find clk high with counter > 5
-• (length (find (= state 3))) - How long was state = 3
-
-DEBUGGING PATTERNS:
-• (find (= overflow 1)) - Find overflow events
-• (find (&& (= valid 1) (= ready 0))) - Find handshake violations
-• Note: WAL != operator syntax varies by implementation
-
-MULTI-STEP ANALYSIS:
-• (step 0) (find (= reset 1)) - Go to start, find reset assertion times
-• (length SIGNALS) - Number of signals in waveform
-""",
-    "debugging": """
-Common WAL Debugging Patterns:
-
-PROTOCOL ANALYSIS:
-• Handshake: (find (&& (= valid 1) (= ready 0))) - Stalled transactions
-• Bus idle: (find (&& (= valid 0) (= ready 1))) - Ready but no data
-• State machines: (find (= state target_state)) - Time in specific state
-
-TIMING ANALYSIS:
-• Clock analysis: (length (find (= clk 1))) - Count clock high periods
-• Pulse width: Use find with consecutive conditions
-• Frequency: (/ (length (find true)) (length (find (= clk 1)))) - Approximate period
-
-SIGNAL VALIDATION:
-• Unknown states: (find (= signal 'x')) - Find X states (if supported)
-• Range check: (find (> signal max_value)) - Values out of range
-• Constant check: (count (!= signal expected)) - Non-constant periods
-
-MEMORY/COUNTER ANALYSIS:
-• Overflow: (find (and (= counter 15) (= overflow 0))) - Missing overflow flag
-• Increment: (find (!= counter (+ (prev counter) 1))) - Non-sequential counts
-• Reset behavior: (find (and (= reset 1) (!= counter 0))) - Reset failures
-
-ERROR DETECTION:
-• Glitches: Look for very short pulses
-• Race conditions: Multiple signals changing simultaneously
-• Protocol violations: Invalid state combinations
-""",
-    "syntax": """
-WAL Syntax Reference:
-
-BASIC SYNTAX:
-• Parentheses required: (function arg1 arg2)
-• Comments: ; This is a comment
-• Numbers: 123, 0xFF (hex), 0b1010 (binary)
-• Strings: "text" or text without spaces
-• Booleans: #t (true), #f (false)
-
-FUNCTION CALLS:
-• (function) - No arguments
-• (function arg) - One argument
-• (function arg1 arg2 arg3) - Multiple arguments
-
-OPERATORS:
-• Arithmetic: + - * / ** (power)
-• Comparison: = != < > <= >=
-• Logical: and or not
-• List: length, nth (if available)
-
-VARIABLES:
-• SIGNALS - Built-in list of signal names
-• INDEX - Built-in current time index
-• signal_name - Direct signal access
-
-CONTROL FLOW:
-• (if condition then else) - Conditional
-• (let ((var value)) body) - Local variables (if supported)
-
-COMMON PATTERNS:
-• (function (condition signal value)) - Nested conditions
-• (operation (find condition)) - Apply operation to search results
-• (length (find condition)) - Count matching conditions
-""",
-}
-
 
 @app.list_tools()
 async def list_tools() -> list[Tool]:
@@ -274,20 +131,6 @@ Use get_wal_help for detailed documentation and examples.""",
             },
         ),
         Tool(
-            name="get_wal_help",
-            description="Get WAL (Waveform Analysis Language) documentation and examples",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "topic": {
-                        "type": "string",
-                        "description": "Help topic: 'overview', 'functions', 'examples', 'debugging', 'syntax'",
-                        "default": "overview",
-                    },
-                },
-            },
-        ),
-        Tool(
             name="get_wal_examples",
             description="Get WAL examples customized for specific waveform signals",
             inputSchema={
@@ -316,8 +159,6 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]):
             return await _get_waveform_length(arguments)
         elif tool_name == "execute_wal_expression":
             return await _execute_wal_expression(arguments)
-        elif tool_name == "get_wal_help":
-            return await _get_wal_help(arguments)
         elif tool_name == "get_wal_examples":
             return await _get_wal_examples(arguments)
         else:
@@ -626,42 +467,6 @@ async def _execute_wal_expression(args: dict[str, Any]) -> list[TextContent]:
             "",
             "For more help: use get_wal_help with topics 'examples', 'functions', or 'debugging'",
         ]
-
-    return [TextContent(type="text", text="\n".join(result_lines))]
-
-
-async def _get_wal_help(args: dict[str, Any]) -> list[TextContent]:
-    """Get WAL documentation and examples.
-
-    Args:
-        args: Dictionary containing:
-            - topic: Help topic (overview, functions, examples, debugging, syntax)
-
-    Returns:
-        List of TextContent with WAL documentation
-    """
-    topic = args.get("topic", "overview")
-
-    if topic not in WAL_DOCUMENTATION:
-        available_topics = ", ".join(WAL_DOCUMENTATION.keys())
-        return [
-            TextContent(
-                type="text",
-                text=f"Unknown topic '{topic}'. Available topics: {available_topics}",
-            )
-        ]
-
-    content = WAL_DOCUMENTATION[topic]
-
-    # Add topic header and navigation info
-    result_lines = [
-        f"WAL Help - {topic.title()}",
-        "=" * 50,
-        content.strip(),
-        "",
-        f"Available topics: {', '.join(WAL_DOCUMENTATION.keys())}",
-        "Use get_wal_help with different topic for more information.",
-    ]
 
     return [TextContent(type="text", text="\n".join(result_lines))]
 
