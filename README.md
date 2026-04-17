@@ -36,7 +36,7 @@ This allows you to use natural language to analyze waveforms.
 To install the skill into `.claude/skills/` your current directory run:
 
 ```sh
-wal-mcp-install-skill
+wal-mcp-install-skills
 ```
 
 Or pass a filepath to the script to install elsewhere.
