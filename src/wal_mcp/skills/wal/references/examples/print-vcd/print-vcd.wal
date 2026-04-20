@@ -1,0 +1,87 @@
+#!wal
+
+;; run like ./print-vcd.wal ../basics/counter.fst
+;; or wal print-vcd.wal ../basics/counter.fst
+
+;; compile first to reduce startup speed
+;; walc print-vcd.wal
+;; wal print-vcd.wo ../basics/counter.fst
+
+;--------------------------------------------------------------------------------
+; Main Program
+;--------------------------------------------------------------------------------
+(when (< (length args) 1)
+      (print "No vcd or fst file specified")
+      (print "usage: print-vcd filename scope")
+      (exit 1))
+
+(load args[0])
+
+;; get longest signal name
+(define max-signal (max (map (fn [x] (length x)) SIGNALS)))
+
+(defun print-header ()
+       (define start INDEX)
+       (printf (+ "%" max-signal "s: ") "Index")
+       (when (>= INDEX 4) (step -4))
+       (define run #t)
+       (while (&& (< INDEX (+ start 20)) run)
+       	      (printf "%-4d" INDEX)
+	      (set [run (step)]))
+       (print)
+       (step -20))
+
+(defun print-bin (signal index)
+       (define start INDEX)
+       (printf (+ "%" max-signal "s: ") signal)
+       (when (>= INDEX 4) (step -4))
+       (define run #t)
+       (define sym "")
+       (while (&& (< INDEX (+ start 20)) run)
+       	      (when (= INDEX start) (printf "|"))
+	      (set (sym (case (get signal) (0 "⎽") (1 "⎻") ("x" "X"))))
+       	      (if (!= (get signal) (get signal)@-1)
+       	      	  (if (get signal) (printf "/%s%s%s" sym sym sym) (printf "\%s%s%s" sym sym sym))
+		  (printf "%s%s%s%s" sym sym sym sym))
+	      (set [run (step)]))
+       (print)
+       (step -20))
+
+(defun print-signal (signal index)
+       (printf (+ "%" max-signal "s: ") signal)
+       (define start INDEX)
+       (when (>= INDEX 4) (step -4))
+       (define run #t)
+       (while (&& (< INDEX (+ start 20)) run)
+       	      (when (= INDEX start) (printf "|"))
+	      (let ([v (get signal)]
+		    [p (get signal)@-1]
+		    [n (get signal)@1])
+		(cond [(= v 0) (printf "────")]
+	      	      [(= v "x") (printf "XXXX")]
+		      [(!= p v) (if (int? v)
+                        (printf "┤%3x" v)
+                        (printf "┤%3s" v))]
+		      [(&& (!= p v) (!= v n)) (printf "┤%2x├" v)]
+		      [(!= v n) (printf "   ├")]
+	      	      [#t (printf "    ")]))
+	      (set [run (step)]))
+       (print)
+       (step -20))
+
+(defun render [signals]
+       (printf (+ "%" max-signal "s: %s\n") "Waveform" TRACE-FILE)
+       (printf (+ "%" max-signal "s: %s\n") "Scope" CS)
+       (print-header)
+       (map (fn (signal)
+       	    	    (if (= (signal-width signal) 1)
+		    	(print-bin signal 10)
+			(print-signal signal 10))) signals))
+
+
+
+
+;; Set current scope
+(if (> (length args) 1)
+    (in-scope args[1] (render LOCAL-SIGNALS))
+    (render SIGNALS))
