@@ -1,7 +1,9 @@
 """MCP server for RTL waveform analysis using WAL (Waveform Analysis Language).
 
-This server provides tools for analyzing waveform files from RTL simulations,
-allowing LLMs to inspect signals, detect transitions, and debug hardware designs.
+This server provides a single tool that executes WAL expressions against a
+persistent evaluator. Loaded waveforms, defined variables, aliases, and the
+current INDEX of each trace all persist across tool calls. Waveform lifecycle
+is managed from inside WAL via (load ...) and (unload ...).
 
 Supported formats: VCD, FST (via WAL)
 """
@@ -10,7 +12,6 @@ import argparse
 import asyncio
 import logging
 from collections.abc import Callable, Coroutine
-from pathlib import Path
 from typing import Any
 
 from mcp.server import Server
@@ -28,7 +29,18 @@ logging.basicConfig(level=logging.INFO)
 
 app = Server("wal-mcp")
 
-_loaded_waveforms: dict[str, TraceContainer] = {}
+_container: TraceContainer = TraceContainer()
+_evaluator: SEval = SEval(_container)
+
+
+def _reset_evaluator() -> None:
+    """Reset the persistent WAL evaluator and trace container.
+
+    Intended for tests; the running server keeps a single evaluator for its lifetime.
+    """
+    global _container, _evaluator
+    _container = TraceContainer()
+    _evaluator = SEval(_container)
 
 
 @app.list_tools()
@@ -36,65 +48,40 @@ async def list_tools() -> list[Tool]:
     """Return list of available waveform analysis tools."""
     return [
         Tool(
-            name="load_waveform",
-            description="Load a waveform file for analysis. Must be called before execute_wal_expression.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "waveform_file": {
-                        "type": "string",
-                        "description": "Path to waveform file (.vcd, .fst, etc.)",
-                    },
-                },
-                "required": ["waveform_file"],
-            },
-        ),
-        Tool(
-            name="unload_waveform",
-            description="Unload a previously loaded waveform file, freeing its resources.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "waveform_file": {
-                        "type": "string",
-                        "description": "Path to waveform file to unload",
-                    },
-                },
-                "required": ["waveform_file"],
-            },
-        ),
-        Tool(
             name="execute_wal_expression",
-            description="""Execute WAL (Waveform Analysis Language) expressions for signal analysis.
+            description="""Execute a WAL (Waveform Analysis Language) expression.
 
-The waveform must be loaded first via load_waveform.
+A single persistent WAL evaluator is shared across calls — loaded waveforms,
+defined variables, aliases, and the current INDEX of each trace all persist
+between calls.
 
-WAL is a functional language with Lisp-like syntax. Key capabilities:
-• Signal access: SIGNALS (list all), signal_name (get value)
-• Time navigation: (step N), INDEX, (find condition)
-• Search/filter: (find condition), (count condition)
-• Logic: (and), (or), (not), (=), (!=), (<), (>)
+Manage waveforms from inside WAL:
+  (load "path/to/file.vcd")        — load with auto id (t0, t1, ...)
+  (load "path/to/file.fst" 'b)     — load with explicit id
+  (unload 't0)                     — unload by id
+
+WAL is a functional, Lisp-like language. Key capabilities:
+• Signal access: SIGNALS (list all), signal_name (value at INDEX)
+• Time navigation: (step N), INDEX, signal@offset
+• Search/filter: (find condition), (count condition), (whenever cond body)
+• Logic: (&&), (||), (!), (=), (!=), (<), (>)
 • Math: (+), (-), (*), (/)
 
 Examples:
-• SIGNALS - List all signal names
-• (length (find true)) - Total simulation length
-• (count (= clk 1)) - Count clock high periods
-• (find (and (= clk 1) (= data 0))) - Find clock high with data low
-• (length (find (> counter 10))) - Time steps where counter > 10""",
+• (load "trace.vcd")               — load a waveform
+• SIGNALS                           — list all signal names
+• (length (find #t))                — total simulation length
+• (count (= clk 1))                 — count clock high periods
+• (find (&& (= clk 1) (= data 0))) — find clock high with data low""",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "waveform_file": {
-                        "type": "string",
-                        "description": "Path to a loaded waveform file",
-                    },
                     "expression": {
                         "type": "string",
                         "description": "WAL expression to execute",
                     },
                 },
-                "required": ["waveform_file", "expression"],
+                "required": ["expression"],
             },
         ),
     ]
@@ -113,115 +100,27 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> list[TextConte
         return [TextContent(type="text", text=f"Error: {e}")]
 
 
-async def _load_waveform(args: dict[str, Any]) -> list[TextContent]:
-    """Load a waveform file for analysis.
-
-    Args:
-        args: Dictionary containing:
-            - waveform_file: Path to waveform file (.vcd, .fst, etc.)
-
-    Returns:
-        List of TextContent with confirmation message
-    """
-    waveform_file = args.get("waveform_file")
-
-    if not waveform_file:
-        return [
-            TextContent(type="text", text="Error: Waveform file path cannot be empty.")
-        ]
-
-    path = Path(waveform_file)
-    if not path.exists():
-        return [
-            TextContent(
-                type="text", text=f"Error: Waveform file not found: {waveform_file}"
-            )
-        ]
-
-    try:
-        container = TraceContainer()
-        container.load(waveform_file)
-        _loaded_waveforms[waveform_file] = container
-        logger.info("Loaded waveform: %s", waveform_file)
-        return [TextContent(type="text", text=f"Loaded waveform: {waveform_file}")]
-    except Exception as e:
-        logger.error("Failed to load waveform file %s: %s", waveform_file, e)
-        return [
-            TextContent(
-                type="text", text=f"Error loading waveform file '{waveform_file}': {e}"
-            )
-        ]
-
-
-async def _unload_waveform(args: dict[str, Any]) -> list[TextContent]:
-    """Unload a previously loaded waveform file.
-
-    Args:
-        args: Dictionary containing:
-            - waveform_file: Path to waveform file to unload
-
-    Returns:
-        List of TextContent with confirmation or error
-    """
-    waveform_file = args.get("waveform_file")
-
-    if not waveform_file:
-        return [
-            TextContent(type="text", text="Error: Waveform file path cannot be empty.")
-        ]
-
-    if waveform_file not in _loaded_waveforms:
-        return [
-            TextContent(
-                type="text", text=f"Error: Waveform not loaded: {waveform_file}"
-            )
-        ]
-
-    del _loaded_waveforms[waveform_file]
-    logger.info("Unloaded waveform: %s", waveform_file)
-    return [TextContent(type="text", text=f"Unloaded waveform: {waveform_file}")]
-
-
 async def _execute_wal_expression(args: dict[str, Any]) -> list[TextContent]:
-    """Execute WAL expression on a loaded waveform.
+    """Execute a WAL expression on the persistent evaluator.
 
     Args:
         args: Dictionary containing:
-            - waveform_file: Path to a loaded waveform file
             - expression: WAL expression to execute
 
     Returns:
-        List of TextContent with expression execution results
+        List of TextContent with the result, or an error message with suggestions.
     """
-    waveform_file = args.get("waveform_file")
     expression = args.get("expression")
-
-    if not waveform_file:
-        return [
-            TextContent(type="text", text="Error: Waveform file path cannot be empty.")
-        ]
 
     if not expression:
         return [TextContent(type="text", text="Error: WAL expression cannot be empty.")]
 
-    container = _loaded_waveforms.get(waveform_file)
-    if container is None:
-        return [
-            TextContent(
-                type="text",
-                text=f"Error: Waveform not loaded: {waveform_file}\n"
-                "Call load_waveform first.",
-            )
-        ]
-
     try:
-        evaluator = SEval(container)
         parsed_expr = read_wal_sexpr(expression)
-        result = evaluator.eval(parsed_expr)
+        result = _evaluator.eval(parsed_expr)
 
         result_lines = [
             f"WAL Expression: {expression}",
-            f"Waveform file: {waveform_file}",
             "",
             f"Result: {result}",
             f"Result type: {type(result).__name__}",
@@ -235,15 +134,15 @@ async def _execute_wal_expression(args: dict[str, Any]) -> list[TextContent]:
             if len(result) > 5:
                 result_lines.append(f"  ... and {len(result) - 5} more")
 
-    except Exception as e:
-        all_signals = list(container.signals) if container is not None else []
-        suggestions = _get_wal_error_suggestions(str(e), all_signals)
+    except (Exception, SystemExit) as e:
+        signals = list(_container.signals)
+        message = str(e) or type(e).__name__
+        suggestions = _get_wal_error_suggestions(message, signals)
 
         result_lines = [
             f"WAL Expression: {expression}",
-            f"Waveform file: {waveform_file}",
             "",
-            f"Execution Error: {e!s}",
+            f"Execution Error: {message}",
             "",
             *suggestions,
         ]
@@ -253,7 +152,13 @@ async def _execute_wal_expression(args: dict[str, Any]) -> list[TextContent]:
 
 def _get_wal_error_suggestions(error_msg: str, signals: list[str]) -> list[str]:
     """Generate helpful WAL suggestions based on error message and available signals."""
-    suggestions = []
+    if not signals:
+        return [
+            "No waveform is loaded. Load one with:",
+            '  (load "path/to/file.vcd")',
+        ]
+
+    suggestions: list[str] = []
 
     if "undefined" in error_msg.lower():
         suggestions.extend(
@@ -271,7 +176,7 @@ def _get_wal_error_suggestions(error_msg: str, signals: list[str]) -> list[str]:
                 "Function expects a list. Try:",
                 "• (find condition) returns a list of time indices",
                 "• (length (find condition)) to count matches",
-                f"• Use signal names directly: {signals[0] if signals else 'signal_name'}",
+                f"• Use signal names directly: {signals[0]}",
             ]
         )
 
@@ -282,21 +187,20 @@ def _get_wal_error_suggestions(error_msg: str, signals: list[str]) -> list[str]:
                 "• SIGNALS - List all signal names",
                 "• (find (= signal_name value)) - Find when signal equals value",
                 "• (count condition) - Count occurrences",
-                "• (length (find true)) - Total simulation length",
+                "• (length (find #t)) - Total simulation length",
             ]
         )
 
-    if signals:
-        first_signal = signals[0]
-        suggestions.extend(
-            [
-                "",
-                f"Examples with your signals (using '{first_signal}'):",
-                f"• (find (= {first_signal} 1)) - Find when {first_signal} is high",
-                f"• (count (= {first_signal} 0)) - Count when {first_signal} is low",
-                f"• (length (find (!= {first_signal} 0))) - Time steps when {first_signal} != 0",
-            ]
-        )
+    first_signal = signals[0]
+    suggestions.extend(
+        [
+            "",
+            f"Examples with your signals (using '{first_signal}'):",
+            f"• (find (= {first_signal} 1)) - Find when {first_signal} is high",
+            f"• (count (= {first_signal} 0)) - Count when {first_signal} is low",
+            f"• (length (find (!= {first_signal} 0))) - Time steps when {first_signal} != 0",
+        ]
+    )
 
     return suggestions
 
@@ -304,8 +208,6 @@ def _get_wal_error_suggestions(error_msg: str, signals: list[str]) -> list[str]:
 _ToolHandler = Callable[[dict[str, Any]], Coroutine[Any, Any, list[TextContent]]]
 
 _TOOL_HANDLERS: dict[str, _ToolHandler] = {
-    "load_waveform": _load_waveform,
-    "unload_waveform": _unload_waveform,
     "execute_wal_expression": _execute_wal_expression,
 }
 

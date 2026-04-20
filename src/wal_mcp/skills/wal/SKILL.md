@@ -16,11 +16,13 @@ Before doing anything, verify the `wal-mcp` MCP server is available:
 
 ## Workflow
 
+All interaction goes through the `execute_wal_expression` tool. The MCP server keeps a single persistent WAL evaluator, so loaded waveforms, defined variables, aliases, and the current `INDEX` of each trace persist across calls.
+
 1. **Identify the waveform file.** Ask the user for the path if not provided. Waveform files have `.vcd` or `.fst` extensions.
-2. **Load the waveform** using the `load_waveform` tool.
-3. **Discover signals** by executing the WAL expression `SIGNALS`.
-4. **Analyze** using `execute_wal_expression` to answer the user's question.
-5. **Unload** the waveform with `unload_waveform` when analysis is complete. Ask the user if they want to keep it loaded for further queries.
+2. **Load the waveform** by executing `(load "path/to/file.vcd")`. WAL assigns the id `t0` (then `t1`, ...) automatically; pass an explicit id with `(load "path" 'a)` if you need it.
+3. **Discover signals** by executing `SIGNALS`.
+4. **Analyze** by executing further WAL expressions to answer the user's question.
+5. **Unload** with `(unload {id})` (`id` is the id from step 2) when finished. Ask the user if they want to keep traces loaded for further queries.
 
 ## WAL Language Reference
 
