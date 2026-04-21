@@ -43,13 +43,6 @@ async def test_load_via_wal_exposes_signals(waveform_file: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_invalid_path_surfaces_wal_error() -> None:
-    """Loading a nonexistent file surfaces a WAL error."""
-    text = await server.execute_wal_expression('(load "/nonexistent/path/file.vcd")')
-    assert "Execution Error:" in text
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
 async def test_execute_wal_expression_valid(waveform_file: str) -> None:
     await server.execute_wal_expression(f'(load "{waveform_file}")')
@@ -142,9 +135,9 @@ async def test_load_trace_missing_path_rejected_by_schema() -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_trace_missing_file_does_not_kill_server() -> None:
-    """SystemExit from WAL trace loaders is converted to ToolError, not propagated."""
-    with pytest.raises(ToolError):
+async def test_load_trace_missing_file_rejected_before_wal() -> None:
+    """Missing files are caught before WAL is invoked (WAL would sys.exit)."""
+    with pytest.raises(ToolError, match="No such file"):
         await server.load_trace("/nonexistent/file.vcd")
     assert await server.loaded_traces() == []
 

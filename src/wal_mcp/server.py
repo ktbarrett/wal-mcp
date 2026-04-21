@@ -13,6 +13,7 @@ import argparse
 import asyncio
 import fnmatch
 import logging
+import os
 import re
 from collections.abc import Callable
 from typing import Annotated, Any
@@ -30,12 +31,11 @@ from wal_mcp import __version__
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-_WAL_ERRORS: tuple[type[BaseException], ...] = (
+_WAL_ERRORS: tuple[type[Exception], ...] = (
     ParseError,
     WalEvalError,
     AssertionError,
     RuntimeError,
-    SystemExit,
 )
 
 _SCOPE_SEP = "^"  # WAL multi-trace separator (TraceContainer uses tid^name)
@@ -195,6 +195,9 @@ async def load_trace(
         Field(description="Optional explicit trace id (default auto: t0, t1, ...)"),
     ] = None,
 ) -> dict[str, Any]:
+    # WAL's loaders call sys.exit() on missing files, so gate the call ourselves.
+    if not os.path.isfile(path):
+        raise ToolError(f"No such file: {path!r}")
     try:
         assigned = _session.load(path, trace_id=trace_id)
     except _WAL_ERRORS as e:
