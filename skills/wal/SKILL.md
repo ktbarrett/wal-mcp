@@ -21,7 +21,7 @@ The MCP server exposes structured tools for routine ops and one escape hatch for
 | List currently loaded traces | `loaded_traces()` |
 | Drop a loaded trace | `unload_trace(trace_id)` |
 | Browse module hierarchy | `list_scopes(trace_id?)` |
-| Find signals matching a glob | `search_signals(pattern, limit?, trace_id?)` |
+| Find signals matching an fnmatch glob (NOT regex) | `search_signals(pattern, limit?, trace_id?)` |
 | Get width / scope of a known signal | `get_signal_info(name)` |
 | Run a WAL query (find/count/whenever/...) | `execute_wal_expression(expression)` |
 
@@ -95,6 +95,7 @@ signal@-1                        -- Value at previous time step
 ## Tips
 
 - Signal names are hierarchical (e.g., `tb.dut.cpu.pc`). Use `search_signals` with a narrow glob to discover exact names -- never `*` on a real design.
+- `search_signals` uses **fnmatch-style globs, not regex**: `*` matches anything, `?` matches one char, `[abc]` is a set, and `.` is a literal dot (not "any char"). Patterns are anchored at both ends -- to substring-match a literal name, wrap it: `*foo.bar*`, not `foo.bar`.
 - WAL uses `&&` and `||` for logical AND/OR, not `and`/`or`.
 - `(find condition)` returns a list of time indices; wrap in `(length ...)` to count.
 - `(count condition)` is shorthand for `(length (find condition))`.
