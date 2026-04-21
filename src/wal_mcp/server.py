@@ -43,7 +43,7 @@ def _reset_evaluator() -> None:
     _evaluator = SEval(_container)
 
 
-@app.list_tools()
+@app.list_tools()  # type: ignore[no-untyped-call,untyped-decorator]
 async def list_tools() -> list[Tool]:
     """Return list of available waveform analysis tools."""
     return [
@@ -87,7 +87,7 @@ Examples:
     ]
 
 
-@app.call_tool()
+@app.call_tool()  # type: ignore[untyped-decorator]
 async def call_tool(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Route tool calls to appropriate handlers."""
     handler = _TOOL_HANDLERS.get(tool_name)
@@ -212,7 +212,7 @@ _TOOL_HANDLERS: dict[str, _ToolHandler] = {
 }
 
 
-async def _main():
+async def _main() -> None:
     async with stdio_server() as (read_stream, write_stream):
         await app.run(
             read_stream,
@@ -228,7 +228,7 @@ async def _main():
         )
 
 
-def main():
+def main() -> None:
     """Main entry point for the MCP server.
 
     Starts the server using stdio transport for communication with MCP clients.
