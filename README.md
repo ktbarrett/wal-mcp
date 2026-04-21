@@ -50,18 +50,40 @@ gh install skill ktbarrett/wal-mcp
 ## Development
 
 To set up a development environment, install the `dev` group and the current package.
-This is easiest done with `uv`:
+This is easiest done with `uv`.
 
 ```bash
 uv sync
 ```
 
+There are also pre-commit hooks which will run lints whenever you make a commit.
+`prek` is the recommended pre-commit hook runner.
+
+First install `prek` if you already haven't.
+
+```
+uv tool install prek
+```
+
+Then install the git hooks.
+
+```
+prek install
+```
+
 ## Testing
 
-To run the test suite:
+`pytest` is used for testing.
+Run the following to run all the tests and collect coverage.
 
 ```bash
 pytest
+```
+
+You can better visualize the coverage by using a coverage report format such as `html`.
+
+```
+coverage html
 ```
 
 ## Credits
