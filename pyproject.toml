@@ -19,7 +19,7 @@ maintainers = [{name = "Kaleb Barrett"}]
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
 dependencies = [
-    "mcp>=1.0.0",
+    "mcp>=1.0.0,<2",
     "wal-lang>=0.8.0",
     "pylibfst",
 ]

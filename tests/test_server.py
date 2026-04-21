@@ -1,13 +1,12 @@
 import os
 import sys
 from typing import Any
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from mcp.types import TextContent
+from mcp.server.fastmcp.exceptions import ToolError
 
 from wal_mcp import server
 
@@ -19,39 +18,43 @@ WAVEFORM_FILES = [VCD_FILE, FST_FILE]
 
 
 @pytest.fixture(autouse=True)
-def reset_evaluator() -> None:
+def reset_session() -> None:
     """Give each test a fresh evaluator and trace container."""
-    server._reset_evaluator()
+    server._reset_session()
 
 
-async def _exec(expr: str) -> str:
-    result = await server._execute_wal_expression({"expression": expr})
-    return result[0].text
+# Business-logic tests call the decorated tool functions directly (the
+# decorator returns the function unchanged). Tests that need to exercise
+# the schema, validation, or dispatch surface go through `server.app.call_tool`.
+
+
+# ---------------------------------------------------------------------------
+# execute_wal_expression: end-to-end persistence + error reporting
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
 async def test_load_via_wal_exposes_signals(waveform_file: str) -> None:
     """Loading a waveform via WAL exposes its signals."""
-    await _exec(f'(load "{waveform_file}")')
-    text = await _exec("SIGNALS")
+    await server.execute_wal_expression(f'(load "{waveform_file}")')
+    text = await server.execute_wal_expression("SIGNALS")
     assert "tb.clk" in text
 
 
 @pytest.mark.asyncio
 async def test_load_invalid_path_surfaces_wal_error() -> None:
     """Loading a nonexistent file surfaces a WAL error."""
-    text = await _exec('(load "/nonexistent/path/file.vcd")')
+    text = await server.execute_wal_expression('(load "/nonexistent/path/file.vcd")')
     assert "Execution Error:" in text
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
 async def test_execute_wal_expression_valid(waveform_file: str) -> None:
-    """Test execute_wal_expression with a valid expression after load."""
-    await _exec(f'(load "{waveform_file}")')
+    await server.execute_wal_expression(f'(load "{waveform_file}")')
 
-    text = await _exec("(length (find (= tb.clk 1)))")
+    text = await server.execute_wal_expression("(length (find (= tb.clk 1)))")
 
     assert "WAL Expression: (length (find (= tb.clk 1)))" in text
     assert "Result: 40" in text
@@ -61,108 +64,228 @@ async def test_execute_wal_expression_valid(waveform_file: str) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
 async def test_execute_wal_expression_invalid_syntax(waveform_file: str) -> None:
-    """Test execute_wal_expression with invalid syntax."""
-    await _exec(f'(load "{waveform_file}")')
-    text = await _exec("(count (= tb.clk 1)")
+    await server.execute_wal_expression(f'(load "{waveform_file}")')
+    text = await server.execute_wal_expression("(count (= tb.clk 1)")
     assert "Execution Error:" in text
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
 async def test_execute_wal_expression_undefined_signal(waveform_file: str) -> None:
-    """Test execute_wal_expression with an undefined signal."""
-    await _exec(f'(load "{waveform_file}")')
-    text = await _exec("(find (= non_existent_signal 1))")
+    await server.execute_wal_expression(f'(load "{waveform_file}")')
+    text = await server.execute_wal_expression("(find (= non_existent_signal 1))")
     assert "Execution Error:" in text
 
 
 @pytest.mark.asyncio
 async def test_execute_wal_no_waveform_loaded() -> None:
-    """Errors with no waveform loaded suggest using (load ...)."""
-    text = await _exec("tb.clk")
+    """Errors with no waveform loaded suggest using load_trace."""
+    text = await server.execute_wal_expression("tb.clk")
     assert "Execution Error:" in text
-    assert "(load " in text
+    assert "load_trace" in text
 
 
 @pytest.mark.asyncio
-async def test_execute_wal_expression_empty_expression() -> None:
-    """Test execute_wal_expression with an empty expression."""
-    result = await server._execute_wal_expression({"expression": ""})
-    assert "Error:" in result[0].text
-    assert "empty" in result[0].text.lower()
+async def test_execute_wal_expression_empty_expression_rejected_by_schema() -> None:
+    """Empty expressions are rejected by the Pydantic min_length=1 constraint."""
+    with pytest.raises(ToolError):
+        await server.app.call_tool("execute_wal_expression", {"expression": ""})
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
 async def test_state_persists_across_calls(waveform_file: str) -> None:
-    """Defines and INDEX persist across multiple execute calls."""
-    await _exec(f'(load "{waveform_file}")')
-    await _exec("(define foo 42)")
-    assert "Result: 42" in await _exec("foo")
+    await server.execute_wal_expression(f'(load "{waveform_file}")')
+    await server.execute_wal_expression("(define foo 42)")
+    assert "Result: 42" in await server.execute_wal_expression("foo")
 
-    await _exec("(step 5)")
-    assert "Result: 5" in await _exec("INDEX")
+    await server.execute_wal_expression("(step 5)")
+    assert "Result: 5" in await server.execute_wal_expression("INDEX")
+
+
+@pytest.mark.asyncio
+async def test_reset_session_clears_state() -> None:
+    await server.execute_wal_expression(f'(load "{VCD_FILE}")')
+    await server.execute_wal_expression("(define foo 99)")
+
+    server._reset_session()
+
+    assert list(server._session.container.signals) == []
+    assert "Execution Error:" in await server.execute_wal_expression("foo")
+
+
+# ---------------------------------------------------------------------------
+# load_trace / unload_trace / loaded_traces
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waveform_file", WAVEFORM_FILES)
-async def test_unload_via_wal(waveform_file: str) -> None:
-    """(unload ...) removes the trace from the container."""
-    await _exec(f'(load "{waveform_file}")')
-    assert len(list(server._container.signals)) > 0
-
-    await _exec("(unload 't0)")
-    assert list(server._container.signals) == []
-
-
-@pytest.mark.asyncio
-async def test_reset_evaluator_clears_state() -> None:
-    """_reset_evaluator() drops loaded waveforms and bindings."""
-    await _exec(f'(load "{VCD_FILE}")')
-    await _exec("(define foo 99)")
-
-    server._reset_evaluator()
-
-    assert list(server._container.signals) == []
-    assert "Execution Error:" in await _exec("foo")
+async def test_load_trace_returns_metadata(waveform_file: str) -> None:
+    payload = await server.load_trace(waveform_file)
+    assert payload["trace_id"] == "t0"
+    assert payload["filename"] == waveform_file
+    assert payload["n_signals"] > 0
+    assert payload["max_index"] is not None
 
 
 @pytest.mark.asyncio
-async def test_list_tools_return_format() -> None:
-    """list_tools returns the single execute tool."""
-    tools = await server.list_tools()
-
-    assert isinstance(tools, list)
-    assert len(tools) == 1
-
-    tool = tools[0]
-    assert tool.name == "execute_wal_expression"
-    assert isinstance(tool.description, str)
-    assert isinstance(tool.inputSchema, dict)
+async def test_load_trace_explicit_id() -> None:
+    payload = await server.load_trace(VCD_FILE, trace_id="main")
+    assert payload["trace_id"] == "main"
 
 
 @pytest.mark.asyncio
-async def test_call_tool_routing() -> None:
-    """Test that call_tool routes to the correct function."""
-    mock_handler = AsyncMock(return_value=[TextContent(type="text", text="mocked")])
-
-    with patch.dict(server._TOOL_HANDLERS, {"execute_wal_expression": mock_handler}):
-        await server.call_tool("execute_wal_expression", {})
-        mock_handler.assert_called_once()
-
-    result = await server.call_tool("unknown_tool", {})
-    assert "Unknown tool: unknown_tool" in result[0].text
+async def test_load_trace_missing_path_rejected_by_schema() -> None:
+    with pytest.raises(ToolError):
+        await server.app.call_tool("load_trace", {})
 
 
 @pytest.mark.asyncio
-async def test_call_tool_exception_handling() -> None:
-    """Test that call_tool handles exceptions properly."""
+async def test_load_trace_missing_file_does_not_kill_server() -> None:
+    """SystemExit from WAL trace loaders is converted to ToolError, not propagated."""
+    with pytest.raises(ToolError):
+        await server.load_trace("/nonexistent/file.vcd")
+    assert await server.loaded_traces() == []
 
-    async def raise_error(_args: dict[str, Any]) -> list[TextContent]:
-        raise RuntimeError("test error")
 
-    with patch.dict(server._TOOL_HANDLERS, {"execute_wal_expression": raise_error}):
-        result = await server.call_tool("execute_wal_expression", {})
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert "Error:" in result[0].text
+@pytest.mark.asyncio
+async def test_unload_trace_removes_it() -> None:
+    await server.load_trace(VCD_FILE)
+    payload = await server.unload_trace("t0")
+    assert payload == {"unloaded": "t0"}
+    assert await server.loaded_traces() == []
+
+
+@pytest.mark.asyncio
+async def test_unload_unknown_trace_id() -> None:
+    with pytest.raises(ToolError):
+        await server.unload_trace("nope")
+
+
+@pytest.mark.asyncio
+async def test_loaded_traces_lists_all() -> None:
+    await server.load_trace(VCD_FILE)
+    await server.load_trace(FST_FILE, trace_id="fst")
+    payload = await server.loaded_traces()
+    ids = {t["trace_id"] for t in payload}
+    assert ids == {"t0", "fst"}
+
+
+# ---------------------------------------------------------------------------
+# list_scopes / search_signals / get_signal_info
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_scopes_returns_hierarchy() -> None:
+    await server.load_trace(VCD_FILE)
+    payload = await server.list_scopes()
+    assert "scopes" in payload
+    assert any("tb" in s for s in payload["scopes"])
+
+
+@pytest.mark.asyncio
+async def test_list_scopes_unknown_trace_id() -> None:
+    await server.load_trace(VCD_FILE)
+    with pytest.raises(ToolError):
+        await server.list_scopes(trace_id="nope")
+
+
+@pytest.mark.asyncio
+async def test_search_signals_glob_match() -> None:
+    await server.load_trace(VCD_FILE)
+    payload = await server.search_signals("tb.clk*")
+    assert payload["total_matches"] >= 1
+    names = [m["name"] for m in payload["matches"]]
+    assert "tb.clk" in names
+
+
+@pytest.mark.asyncio
+async def test_search_signals_no_match() -> None:
+    await server.load_trace(VCD_FILE)
+    payload = await server.search_signals("definitely_not_a_signal_*")
+    assert payload["total_matches"] == 0
+    assert payload["matches"] == []
+
+
+@pytest.mark.asyncio
+async def test_search_signals_limit_truncates() -> None:
+    await server.load_trace(VCD_FILE)
+    payload = await server.search_signals("*", limit=1)
+    assert payload["limit"] == 1
+    assert payload["returned"] == 1
+    assert payload["truncated"] is True
+    assert payload["total_matches"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_search_signals_limit_above_cap_rejected_by_schema() -> None:
+    """The Pydantic Field(le=500) constraint rejects out-of-range limits."""
+    await server.load_trace(VCD_FILE)
+    with pytest.raises(ToolError):
+        await server.app.call_tool("search_signals", {"pattern": "*", "limit": 9999})
+
+
+@pytest.mark.asyncio
+async def test_search_signals_missing_pattern_rejected_by_schema() -> None:
+    await server.load_trace(VCD_FILE)
+    with pytest.raises(ToolError):
+        await server.app.call_tool("search_signals", {})
+
+
+@pytest.mark.asyncio
+async def test_get_signal_info_known_signal() -> None:
+    await server.load_trace(VCD_FILE)
+    payload = await server.get_signal_info("tb.clk")
+    assert payload["name"] == "tb.clk"
+    assert payload["leaf"] == "clk"
+    assert payload["scope"] == "tb"
+    assert payload["width"] is not None
+
+
+@pytest.mark.asyncio
+async def test_get_signal_info_unknown_signal() -> None:
+    await server.load_trace(VCD_FILE)
+    with pytest.raises(ToolError):
+        await server.get_signal_info("tb.nope")
+
+
+# ---------------------------------------------------------------------------
+# Tool surface
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_tools_exposes_all_tools() -> None:
+    tools = await server.app.list_tools()
+    names = {t.name for t in tools}
+    assert names == {
+        "load_trace",
+        "unload_trace",
+        "loaded_traces",
+        "list_scopes",
+        "search_signals",
+        "get_signal_info",
+        "execute_wal_expression",
+    }
+    for tool in tools:
+        assert isinstance(tool.description, str)
+        assert isinstance(tool.inputSchema, dict)
+
+
+@pytest.mark.asyncio
+async def test_search_signals_schema_advertises_limit_bounds() -> None:
+    """Pydantic Field(ge=, le=) must surface in the JSON schema sent to clients."""
+    tools = await server.app.list_tools()
+    by_name = {t.name: t for t in tools}
+    limit: dict[str, Any] = by_name["search_signals"].inputSchema["properties"]["limit"]
+    assert limit["minimum"] == 1
+    assert limit["maximum"] == 500
+    assert limit["default"] == 50
+
+
+@pytest.mark.asyncio
+async def test_call_unknown_tool() -> None:
+    with pytest.raises(ToolError):
+        await server.app.call_tool("unknown_tool", {})

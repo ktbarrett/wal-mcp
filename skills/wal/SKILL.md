@@ -9,20 +9,31 @@ You are an expert in RTL waveform analysis using WAL (Waveform Analysis Language
 
 ## Setup Check
 
-Before doing anything, verify the `wal-mcp` MCP server is available:
+Before doing anything, probe the server by calling `loaded_traces` (zero-arg, idempotent). If the call succeeds, the wal-mcp server is reachable -- proceed. If it errors (tool not found, connection refused, etc.), tell the user the wal-mcp MCP server is not configured and stop; do not attempt the workflow.
 
-1. Call `mcp__gateway__get_server_details` with `server_names: ["wal-mcp"]` to confirm the server exists.
-2. If the server is not available, inform the user that the `wal-mcp` MCP server must be configured and stop.
+## Tool Map
+
+The MCP server exposes structured tools for routine ops and one escape hatch for arbitrary WAL queries. Prefer the structured tools -- they're cheaper and harder to misuse.
+
+| Task | Tool |
+|---|---|
+| Load a `.vcd` / `.fst` file | `load_trace(path, trace_id?)` |
+| List currently loaded traces | `loaded_traces()` |
+| Drop a loaded trace | `unload_trace(trace_id)` |
+| Browse module hierarchy | `list_scopes(trace_id?)` |
+| Find signals matching a glob | `search_signals(pattern, limit?, trace_id?)` |
+| Get width / scope of a known signal | `get_signal_info(name)` |
+| Run a WAL query (find/count/whenever/...) | `execute_wal_expression(expression)` |
 
 ## Workflow
 
-All interaction goes through the `execute_wal_expression` tool. The MCP server keeps a single persistent WAL evaluator, so loaded waveforms, defined variables, aliases, and the current `INDEX` of each trace persist across calls.
+A persistent WAL evaluator is shared across calls -- loaded waveforms, defines, aliases, and per-trace `INDEX` all survive between tool calls.
 
-1. **Identify the waveform file.** Ask the user for the path if not provided. Waveform files have `.vcd` or `.fst` extensions.
-2. **Load the waveform** by executing `(load "path/to/file.vcd")`. WAL assigns the id `t0` (then `t1`, ...) automatically; pass an explicit id with `(load "path" 'a)` if you need it.
-3. **Discover signals** by executing `SIGNALS`.
-4. **Analyze** by executing further WAL expressions to answer the user's question.
-5. **Unload** with `(unload {id})` (`id` is the id from step 2) when finished. Ask the user if they want to keep traces loaded for further queries.
+1. **Identify the waveform file.** Ask the user for the path if not provided. Files end in `.vcd` or `.fst`.
+2. **Load** with `load_trace`. Note the returned `trace_id` (default: `t0`, `t1`, ...).
+3. **Discover signals.** Real designs have 10k-100k signals -- never enumerate. Use `list_scopes` first to learn the hierarchy, then `search_signals` with a narrow glob (e.g. `tb.dut.cpu.*`, `*clk*`). If the result is `truncated`, narrow the pattern instead of raising the limit.
+4. **Analyze** with `execute_wal_expression` for real WAL queries (`find`, `count`, `whenever`, `timeframe`, `define`, etc.).
+5. **Unload** with `unload_trace(trace_id)` when finished. Ask the user if they want to keep traces loaded for further queries.
 
 ## WAL Language Reference
 
@@ -40,48 +51,50 @@ ${{dir:references/examples}}
 
 ### Signal Discovery
 ```
-SIGNALS                          — List all signal names
-(length (find true))             — Total simulation length in time steps
+list_scopes                      -- Module/scope hierarchy (use first)
+search_signals "tb.dut.*"        -- Narrow glob, hard cap on results
+get_signal_info "tb.clk"         -- Width and scope of a known signal
+(length (find true))             -- Total simulation length in time steps
 ```
 
 ### Finding Events
 ```
-(find (= signal 1))             — All times where signal is high
-(find (&& (= valid 1) (= ready 0)))  — Handshake stalls
-(count (= error 1))             — Count error assertions
+(find (= signal 1))             -- All times where signal is high
+(find (&& (= valid 1) (= ready 0)))  -- Handshake stalls
+(count (= error 1))             -- Count error assertions
 ```
 
 ### Timing Analysis
 ```
-(step 0) signal                  — Value at time 0
-(step N) signal                  — Value at time N
-signal@1                         — Value at next time step (relative)
-signal@-1                        — Value at previous time step
+(step 0) signal                  -- Value at time 0
+(step N) signal                  -- Value at time N
+signal@1                         -- Value at next time step (relative)
+signal@-1                        -- Value at previous time step
 ```
 
 ### Transition Detection
 ```
-(find (!= signal signal@-1))    — All transition times for a signal
-(find (&& (= signal 0) (= signal@1 1)))  — Rising edges
-(find (&& (= signal 1) (= signal@1 0)))  — Falling edges
+(find (!= signal signal@-1))    -- All transition times for a signal
+(find (&& (= signal 0) (= signal@1 1)))  -- Rising edges
+(find (&& (= signal 1) (= signal@1 0)))  -- Falling edges
 ```
 
 ### Multi-Signal Correlation
 ```
-(find (&& (= clk 1) (= enable 1)))           — Clock-gated events
-(whenever (= trigger 1) (print INDEX data))   — Print data at trigger points
+(find (&& (= clk 1) (= enable 1)))           -- Clock-gated events
+(whenever (= trigger 1) (print INDEX data))   -- Print data at trigger points
 ```
 
 ### Debugging Patterns
 ```
-(find (> counter max_expected))               — Out-of-range values
-(length (find (&& (= valid 1) (= ready 0)))) — Backpressure duration
-(find (= state error_state))                  — FSM error states
+(find (> counter max_expected))               -- Out-of-range values
+(length (find (&& (= valid 1) (= ready 0)))) -- Backpressure duration
+(find (= state error_state))                  -- FSM error states
 ```
 
 ## Tips
 
-- Signal names are hierarchical (e.g., `tb.dut.cpu.pc`). Use `SIGNALS` to discover exact names.
+- Signal names are hierarchical (e.g., `tb.dut.cpu.pc`). Use `search_signals` with a narrow glob to discover exact names -- never `*` on a real design.
 - WAL uses `&&` and `||` for logical AND/OR, not `and`/`or`.
 - `(find condition)` returns a list of time indices; wrap in `(length ...)` to count.
 - `(count condition)` is shorthand for `(length (find condition))`.
