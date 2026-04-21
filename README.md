@@ -41,6 +41,12 @@ wal-mcp-install-skills
 
 Or pass a filepath to the script to install elsewhere.
 
+Alternatively, if you are using the Github CLI application you can install the skill using that.
+
+```sh
+gh install skill ktbarrett/wal-mcp
+```
+
 ## Development
 
 To set up a development environment, install the `dev` group and the current package.
