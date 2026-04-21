@@ -327,70 +327,36 @@ async def execute_wal_expression(
             result_lines.append(f"  ... and {len(result) - 5} more")
 
     except _WAL_ERRORS as e:
-        signals = list(_session.container.signals)
         message = str(e) or type(e).__name__
-        suggestions = _get_wal_error_suggestions(message, signals)
-
         result_lines = [
             f"WAL Expression: {expression}",
             "",
-            f"Execution Error: {message}",
-            "",
-            *suggestions,
+            f"{type(e).__name__}: {message}",
+            _wal_error_hint(e),
         ]
 
     return "\n".join(result_lines)
 
 
-def _get_wal_error_suggestions(error_msg: str, signals: list[str]) -> list[str]:
-    """Generate helpful WAL suggestions based on error message and available signals."""
-    if not signals:
-        return [
-            "No waveform is loaded. Load one with the load_trace tool.",
-        ]
-
-    suggestions: list[str] = []
-
-    if "undefined" in error_msg.lower():
-        suggestions.extend(
-            [
-                "Variable/function not found. Try:",
-                "- Use search_signals to find a valid signal name",
-                f"- A loaded signal: {signals[0]}",
-            ]
+def _wal_error_hint(exc: Exception) -> str:
+    """One-line follow-up hint keyed on exception type and current session state."""
+    if not _session.container.traces:
+        return "Hint: no waveform loaded -- call load_trace first."
+    if isinstance(exc, ParseError):
+        return (
+            "Hint: WAL syntax error -- check parentheses, quoting, and function names."
         )
-
-    if "argument must be a list" in error_msg.lower():
-        suggestions.extend(
-            [
-                "Function expects a list. Try:",
-                "- (find condition) returns a list of time indices",
-                "- (length (find condition)) to count matches",
-                f"- Use signal names directly: {signals[0]}",
-            ]
+    if isinstance(exc, WalEvalError):
+        return (
+            "Hint: evaluation failed -- verify signal names with search_signals "
+            "and inspect signal width/scope with get_signal_info."
         )
-
-    if not suggestions:
-        suggestions.extend(
-            [
-                "Common WAL patterns:",
-                "- (find (= signal_name value)) - Find when signal equals value",
-                "- (count condition) - Count occurrences",
-                "- (length (find #t)) - Total simulation length",
-            ]
-        )
-
-    first_signal = signals[0]
-    suggestions.extend(
-        [
-            "",
-            f"Examples with your signals (using '{first_signal}'):",
-            f"- (find (= {first_signal} 1))",
-            f"- (count (= {first_signal} 0))",
-        ]
+    # _WAL_ERRORS only contains the four types above, so this catches the
+    # remaining RuntimeError / AssertionError without a redundant isinstance check.
+    return (
+        "Hint: check trace state with loaded_traces and signal availability "
+        "with search_signals."
     )
-
-    return suggestions
 
 
 def main() -> None:

@@ -59,7 +59,8 @@ async def test_execute_wal_expression_valid(waveform_file: str) -> None:
 async def test_execute_wal_expression_invalid_syntax(waveform_file: str) -> None:
     await server.execute_wal_expression(f'(load "{waveform_file}")')
     text = await server.execute_wal_expression("(count (= tb.clk 1)")
-    assert "Execution Error:" in text
+    assert "ParseError:" in text
+    assert "Hint:" in text
 
 
 @pytest.mark.asyncio
@@ -67,15 +68,34 @@ async def test_execute_wal_expression_invalid_syntax(waveform_file: str) -> None
 async def test_execute_wal_expression_undefined_signal(waveform_file: str) -> None:
     await server.execute_wal_expression(f'(load "{waveform_file}")')
     text = await server.execute_wal_expression("(find (= non_existent_signal 1))")
-    assert "Execution Error:" in text
+    assert "WalEvalError:" in text
+    assert "search_signals" in text
 
 
 @pytest.mark.asyncio
 async def test_execute_wal_no_waveform_loaded() -> None:
     """Errors with no waveform loaded suggest using load_trace."""
     text = await server.execute_wal_expression("tb.clk")
-    assert "Execution Error:" in text
     assert "load_trace" in text
+
+
+@pytest.mark.asyncio
+async def test_wal_error_hint_dispatch() -> None:
+    """Directly exercise each branch of _wal_error_hint."""
+    from wal.ast_defs import WalEvalError
+    from wal.reader import ParseError
+
+    # No traces: load_trace prompt regardless of exception type.
+    assert "load_trace" in server._wal_error_hint(RuntimeError("anything"))
+
+    await server.load_trace(VCD_FILE)
+    assert "parentheses" in server._wal_error_hint(ParseError("ctx", "bad parse"))
+    assert "search_signals" in server._wal_error_hint(WalEvalError())
+    # RuntimeError / AssertionError fall through to the trace-state hint. WAL's
+    # SEval rewraps these into WalEvalError before they leave the evaluator, so
+    # the only paths that hit this branch are direct WalSession calls.
+    assert "loaded_traces" in server._wal_error_hint(RuntimeError("No traces loaded"))
+    assert "loaded_traces" in server._wal_error_hint(AssertionError("trace id in use"))
 
 
 @pytest.mark.asyncio
@@ -104,7 +124,8 @@ async def test_reset_session_clears_state() -> None:
     server._reset_session()
 
     assert list(server._session.container.signals) == []
-    assert "Execution Error:" in await server.execute_wal_expression("foo")
+    text = await server.execute_wal_expression("foo")
+    assert "load_trace" in text  # session was reset, no traces remain
 
 
 # ---------------------------------------------------------------------------

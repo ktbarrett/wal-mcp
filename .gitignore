@@ -16,3 +16,6 @@ CLAUDE.md
 # Environments
 .python-version
 .venv/
+
+# Coverage
+.coverage
