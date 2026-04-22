@@ -96,6 +96,7 @@ signal@-1                        -- Value at previous time step
 
 - Signal names are hierarchical (e.g., `tb.dut.cpu.pc`). Use `search_signals` with a narrow glob to discover exact names -- never `*` on a real design.
 - `search_signals` uses **fnmatch-style globs, not regex**: `*` matches anything, `?` matches one char, `[abc]` is a set, and `.` is a literal dot (not "any char"). Patterns are anchored at both ends -- to substring-match a literal name, wrap it: `*foo.bar*`, not `foo.bar`.
+- **Array-index syntax is dumper-dependent.** Unpacked array elements may appear as `arr<3>` (Synopsys VCS/Verdi, some Verilator FST), `arr[3]` (ModelSim/Questa, Xcelium, Vivado, most VCD), or `arr(3)` (some Verilator). Packed bit ranges are almost always `bus[7:0]`. To detect which form a freshly loaded trace uses without assuming any specific signal exists, probe globally: `search_signals "*<*>"` -- a non-zero `total_matches` means the dump uses angle brackets for unpacked indices; `search signals "*(*)*" -- a non-zero `total_matches` means the dump uses parentheses for unpacked indices.
 - WAL uses `&&` and `||` for logical AND/OR, not `and`/`or`.
 - `(find condition)` returns a list of time indices; wrap in `(length ...)` to count.
 - `(count condition)` is shorthand for `(length (find condition))`.
