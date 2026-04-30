@@ -14,12 +14,23 @@ def main() -> None:
     parser.add_argument(
         "dest",
         nargs="?",
-        default=".claude/skills",
+        default=None,
         help="Directory to install skills into (default: .claude/skills)",
+    )
+    parser.add_argument(
+        "--user",
+        action="store_true",
+        help="Install into the user-local skill directory (~/.claude/skills)",
     )
     args = parser.parse_args()
 
-    dest = Path(args.dest)
+    if args.user and args.dest is not None:
+        parser.error("dest and --user are mutually exclusive")
+
+    if args.user:
+        dest = Path.home() / ".claude" / "skills"
+    else:
+        dest = Path(args.dest if args.dest is not None else ".claude/skills")
 
     skills_pkg = files("wal_mcp") / "skills"
     with as_file(skills_pkg) as skills_src:
