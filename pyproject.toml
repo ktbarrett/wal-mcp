@@ -11,7 +11,7 @@ exclude = [".gitignore"]
 
 [project]
 name = "wal-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server for RTL waveform analysis using WAL"
 readme = "README.md"
 authors = [{name = "Yossi Nivin"}]
